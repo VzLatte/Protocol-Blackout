@@ -1,0 +1,51 @@
+{
+  "project": {
+    "name": "PROTOCOL_BLACKOUT",
+    "codename": "NEURAL_STRIKE",
+    "version": "1.2.0",
+    "description": "High-stakes psychological strategy engine with modular component architecture.",
+    "author": "Operative_01",
+    "license": "MIT"
+  },
+  "engine_config": {
+    "framework": "React + TypeScript + Vite",
+    "styling": "TailwindCSS",
+    "icons": "Lucide-React",
+    "audio_engine": "Web Audio API (OscillatorNode)",
+    "state_management": "Custom Hook (useGameState)"
+  },
+  "gameplay_constants": {
+    "initial_hp": 40,
+    "starting_ap": 4,
+    "income_ap": 2,
+    "max_ap_standard": 10,
+    "max_ap_overload": 12,
+    "round_chaos_frequency": 3
+  },
+  "economy": {
+    "currency_name": "DATA_CREDITS",
+    "unlock_mechanism": "Merit-Based / Non-Gacha",
+    "tier_costs": {
+      "t1": 0,
+      "t2": 500,
+      "t3": 1500
+    }
+  },
+  "architecture_manifest": {
+    "root": "src/",
+    "modules": [
+      "components/views",
+      "components/layout",
+      "components/ui",
+      "hooks",
+      "logic/ai",
+      "constants",
+      "types"
+    ]
+  },
+  "ai_protocols": {
+    "archetypes": ["TURTLE", "BERSERKER", "MIRROR"],
+    "difficulty_scaling": true,
+    "memory_depth": 3
+  }
+}
