@@ -23,6 +23,9 @@ import {
   UNIT_PRICES
 } from './constants';
 import { calculateAIMove } from './aiLogic';
+import { AudioService } from './services/audioService';
+
+const MENU_MUSIC_URL = "https://github.com/VzLatte/Protocol-Blackout/raw/refs/heads/main/Shadow%20in%20the%20Lobby.mp3";
 
 export function useGameState() {
   const [phase, setPhase] = useState<Phase>(Phase.SPLASH);
@@ -59,6 +62,20 @@ export function useGameState() {
   const [currentCampaignLevel, setCurrentCampaignLevel] = useState<number | null>(null);
   const [lastEarnedCredits, setLastEarnedCredits] = useState(0);
 
+  // Settings
+  const [sfxEnabled, setSfxEnabled] = useState(true);
+  const [bgmEnabled, setBgmEnabled] = useState(() => {
+    const saved = localStorage.getItem('protocol_bgm_enabled');
+    return saved ? saved === 'true' : true;
+  });
+  const [bgmVolume, setBgmVolume] = useState(() => {
+    const saved = localStorage.getItem('protocol_bgm_volume');
+    return saved ? parseFloat(saved) : 0.5;
+  });
+  const [visualLevel, setVisualLevel] = useState<VisualLevel>(VisualLevel.MID);
+
+  const audioService = AudioService.getInstance();
+
   useEffect(() => {
     localStorage.setItem('protocol_credits', credits.toString());
   }, [credits]);
@@ -75,9 +92,23 @@ export function useGameState() {
     localStorage.setItem('protocol_stats', JSON.stringify(stats));
   }, [stats]);
 
-  // Settings
-  const [sfxEnabled, setSfxEnabled] = useState(true);
-  const [visualLevel, setVisualLevel] = useState<VisualLevel>(VisualLevel.MID);
+  useEffect(() => {
+    localStorage.setItem('protocol_bgm_enabled', bgmEnabled.toString());
+    if (!bgmEnabled) {
+      audioService.stopBGM();
+    } else if (phase !== Phase.SPLASH) {
+      audioService.playBGM(MENU_MUSIC_URL, bgmVolume);
+    }
+  }, [bgmEnabled, phase]);
+
+  useEffect(() => {
+    localStorage.setItem('protocol_bgm_volume', bgmVolume.toString());
+    audioService.setBGMVolume(bgmVolume);
+  }, [bgmVolume]);
+
+  const playSfx = (type: 'beep' | 'confirm' | 'cancel' | 'danger' | 'success' | 'startup' | 'buy') => {
+    audioService.playProceduralSfx(type, sfxEnabled);
+  };
 
   // Setup
   const [setupCount, setSetupCount] = useState(2);
@@ -108,86 +139,6 @@ export function useGameState() {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const timerRef = useRef<number | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-
-  const playSfx = (type: 'beep' | 'confirm' | 'cancel' | 'danger' | 'success' | 'startup' | 'buy') => {
-    if (!sfxEnabled) return;
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    const now = ctx.currentTime;
-
-    switch (type) {
-      case 'buy':
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, now);
-        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
-        gain.gain.setValueAtTime(0.1, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-        osc.start(now);
-        osc.stop(now + 0.2);
-        break;
-      case 'startup':
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(40, now);
-        osc.frequency.exponentialRampToValueAtTime(440, now + 0.5);
-        gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(0.1, now + 0.1);
-        gain.gain.linearRampToValueAtTime(0, now + 0.5);
-        osc.start(now);
-        osc.stop(now + 0.5);
-        break;
-      case 'beep':
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(440, now);
-        gain.gain.setValueAtTime(0.05, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-        osc.start(now);
-        osc.stop(now + 0.1);
-        break;
-      case 'confirm':
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(600, now);
-        osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
-        gain.gain.setValueAtTime(0.1, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-        osc.start(now);
-        osc.stop(now + 0.2);
-        break;
-      case 'cancel':
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(300, now);
-        osc.frequency.exponentialRampToValueAtTime(150, now + 0.2);
-        gain.gain.setValueAtTime(0.05, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-        osc.start(now);
-        osc.stop(now + 0.2);
-        break;
-      case 'danger':
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(100, now);
-        osc.frequency.linearRampToValueAtTime(200, now + 0.1);
-        osc.frequency.linearRampToValueAtTime(100, now + 0.2);
-        gain.gain.setValueAtTime(0.1, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-        osc.start(now);
-        osc.stop(now + 0.3);
-        break;
-      case 'success':
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(440, now);
-        osc.frequency.setValueAtTime(660, now + 0.1);
-        osc.frequency.setValueAtTime(880, now + 0.2);
-        gain.gain.setValueAtTime(0.1, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-        osc.start(now);
-        osc.stop(now + 0.5);
-        break;
-    }
-  };
 
   const usePromoCode = (code: string) => {
     const clean = code.trim().toUpperCase();
@@ -299,21 +250,32 @@ export function useGameState() {
       if (currentCampaignLevel !== null && currentCampaignLevel === highestLevelReached && highestLevelReached < 5) {
         setHighestLevelReached(prev => prev + 1);
       }
+    } else if (winners.length === 0) {
+      earned = 10; // Mutual Failure/Draw consolation
     }
+    
     setLastEarnedCredits(earned);
     setCredits(prev => prev + earned);
   };
 
   useEffect(() => {
-    if (phase === Phase.PASS_PHONE || phase === Phase.TURN_ENTRY) {
+    if (phase === Phase.PASS_PHONE || (phase === Phase.TURN_ENTRY && players[currentPlayerIdx]?.isAI)) {
       const activePlayer = players[currentPlayerIdx];
       if (activePlayer?.isAI && !isAIThinking) {
         setIsAIThinking(true);
         setTimeout(() => {
           const move = calculateAIMove(activePlayer, players, fullHistory, round);
-          submitAction(move);
-          setIsAIThinking(false);
-        }, 1500);
+          if (phase === Phase.PASS_PHONE) {
+            setPhase(Phase.TURN_ENTRY);
+            setTimeout(() => {
+              submitAction(move);
+              setIsAIThinking(false);
+            }, 1000);
+          } else {
+            submitAction(move);
+            setIsAIThinking(false);
+          }
+        }, 1200);
       }
     }
   }, [phase, currentPlayerIdx, players]);
@@ -324,7 +286,9 @@ export function useGameState() {
       setLocalAttackAp(0);
       setLocalTargetId(undefined);
 
-      if (timeLimit > 0) {
+      // Disable timer in campaign mode
+      const isCampaign = currentCampaignLevel !== null;
+      if (timeLimit > 0 && !isCampaign) {
         setTimeLeft(timeLimit);
         if (timerRef.current) clearInterval(timerRef.current);
         timerRef.current = window.setInterval(() => {
@@ -345,7 +309,7 @@ export function useGameState() {
       setTimeLeft(null);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [phase, currentPlayerIdx, timeLimit]);
+  }, [phase, currentPlayerIdx, timeLimit, currentCampaignLevel]);
 
   useEffect(() => {
     if (phase === Phase.RESOLUTION && scrollRef.current) {
@@ -406,20 +370,25 @@ export function useGameState() {
   const selectUnit = (unitType: UnitType) => {
     playSfx('success');
     setIsLockedIn(true);
+    const currentIdx = currentPlayerIdx;
+    const isLast = currentIdx >= players.length - 1;
+
     setTimeout(() => {
       setPlayers(prevPlayers => {
         const updated = [...prevPlayers];
-        updated[currentPlayerIdx] = {
-          ...updated[currentPlayerIdx],
+        updated[currentIdx] = {
+          ...updated[currentIdx],
           unit: UNITS[unitType],
           originalType: unitType
         };
         return updated;
       });
+
       setConfirmingUnit(null);
       setIsLockedIn(false);
-      if (currentPlayerIdx < players.length - 1) {
-        setCurrentPlayerIdx(prev => prev + 1);
+      
+      if (!isLast) {
+        setCurrentPlayerIdx(currentIdx + 1);
       } else {
         setPhase(Phase.PASS_PHONE);
         setCurrentPlayerIdx(0);
@@ -437,7 +406,7 @@ export function useGameState() {
           [AIArchetype.STRATEGIST]: UnitType.OVERLOAD
         };
         const preferred = archetypesToUnits[activePlayer.aiConfig!.archetype];
-        setTimeout(() => selectUnit(preferred), 1000);
+        setTimeout(() => selectUnit(preferred), 1500);
       }
     }
   }, [phase, currentPlayerIdx]);
@@ -493,6 +462,7 @@ export function useGameState() {
       });
     }
 
+    // Spend AP first
     submissions.forEach(sub => {
       const p = nextPlayers.find(x => x.id === sub.playerId);
       if (p) {
@@ -501,6 +471,13 @@ export function useGameState() {
       }
     });
 
+    // Take HP Snapshots before calculating damage (Simultaneous Resolution)
+    const hpSnapshots = new Map(nextPlayers.map(p => [p.id, p.hp]));
+    const totalIncomingDamage = new Map(nextPlayers.map(p => [p.id, 0]));
+    const leechHeals = new Map(nextPlayers.map(p => [p.id, 0]));
+    const reflectedDmg = new Map(nextPlayers.map(p => [p.id, 0]));
+
+    // Calculate Shields/Invincibility (Defense Phase)
     const shields: Record<string, number> = {};
     const invincible: Record<string, boolean> = {};
 
@@ -515,72 +492,123 @@ export function useGameState() {
       }
     });
 
-    nextPlayers.forEach(p => {
-      const sub = submissions.find(s => s.playerId === p.id);
-      if (!sub) return;
+    // Resolution Phase: Calculate all strikes based on snapshots
+    submissions.forEach(sub => {
+      const attacker = nextPlayers.find(x => x.id === sub.playerId);
+      if (!attacker || (sub.action.attackAp === 0)) return;
 
-      if (invincible[p.id]) {
-        logs.push({ attackerId: p.id, type: ActionType.PHASE, resultMessage: `${p.name} synchronized with Ghost Phase. Tactical immunity achieved.` });
-      } else if (sub.action.blockAp > 0) {
-        logs.push({ attackerId: p.id, type: ActionType.BLOCK, shield: shields[p.id], resultMessage: `${p.name} initialized ${sub.action.blockAp} AP Shield Protocol (+${shields[p.id]} HP Mitigation).` });
-      } else if (sub.action.blockAp === 0 && sub.action.attackAp === 0) {
-        logs.push({ attackerId: p.id, type: ActionType.RESERVE, resultMessage: `${p.name} bypassed aggressive protocols to reserve operational energy.` });
+      const target = nextPlayers.find(x => x.id === sub.action.targetId);
+      if (!target) return;
+
+      const targetSub = submissions.find(s => s.playerId === target.id);
+      
+      let baseDmg = (BASE_ATTACK_DMG * sub.action.attackAp) * attackDamageMultiplier;
+      const snapshotHp = hpSnapshots.get(target.id) || 0;
+      
+      if (!abilitiesLocked && attacker.unit?.type === UnitType.REAPER && snapshotHp < 15) baseDmg += 3;
+      if (!abilitiesLocked && attacker.unit?.type === UnitType.GAMBLER) {
+         const attackerSnapshotHp = hpSnapshots.get(attacker.id) || INITIAL_HP;
+         baseDmg += Math.floor((INITIAL_HP - attackerSnapshotHp) / 5);
       }
 
-      if (sub.action.attackAp > 0 && sub.action.targetId) {
-        const attacker = p;
-        const target = nextPlayers.find(x => x.id === sub.action.targetId);
-        const targetSub = submissions.find(s => s.playerId === target?.id);
-        if (attacker && target) {
-          let baseDmg = (BASE_ATTACK_DMG * sub.action.attackAp) * attackDamageMultiplier;
-          if (!abilitiesLocked && attacker.unit?.type === UnitType.REAPER && target.hp < 15) baseDmg += 3;
-          if (!abilitiesLocked && attacker.unit?.type === UnitType.GAMBLER) {
-             baseDmg += Math.floor((INITIAL_HP - attacker.hp) / 5);
-          }
-          const targetShield = shields[target.id] || 0;
-          let blocked = invincible[target.id] ? baseDmg : Math.min(baseDmg, targetShield);
-          let finalDmg = Math.max(0, baseDmg - blocked);
-          target.hp -= finalDmg;
-          if (!abilitiesLocked && attacker.unit?.type === UnitType.LEECH && targetSub?.action.attackAp === 0 && targetSub?.action.blockAp === 0) {
-            const heal = 3 * sub.action.attackAp; 
-            attacker.hp = Math.min(INITIAL_HP, attacker.hp + heal);
-            logs.push({ attackerId: attacker.id, targetId: target.id, type: ActionType.PHASE, resultMessage: `${attacker.name} leached health from ${target.name} (+${heal} HP).` });
-          }
-          const isElim = target.hp <= 0;
-          logs.push({ 
-            attackerId: attacker.id, targetId: target.id, type: ActionType.ATTACK, 
-            damage: finalDmg, blocked: blocked, isElimination: isElim,
-            resultMessage: `${attacker.name} targeted ${target.name} for ${baseDmg} damage. ${blocked} mitigated by defense.` 
-          });
-          if (!abilitiesLocked && target.unit?.type === UnitType.TITAN && (shields[target.id] > 0)) {
-            const reflect = 2 * sub.action.attackAp;
-            attacker.hp -= reflect;
-            logs.push({ attackerId: target.id, targetId: attacker.id, type: ActionType.BLOCK, reflected: reflect, resultMessage: `Titan Spike reflection hit ${attacker.name} for ${reflect} damage!` });
-          }
+      const targetShield = shields[target.id] || 0;
+      let blocked = invincible[target.id] ? baseDmg : Math.min(baseDmg, targetShield);
+      let finalDmg = Math.max(0, baseDmg - blocked);
+
+      // Accumulate damage for simultaneous application
+      totalIncomingDamage.set(target.id, (totalIncomingDamage.get(target.id) || 0) + finalDmg);
+
+      // Leech Logic
+      if (!abilitiesLocked && attacker.unit?.type === UnitType.LEECH && targetSub?.action.attackAp === 0 && targetSub?.action.blockAp === 0) {
+        const heal = 3 * sub.action.attackAp; 
+        leechHeals.set(attacker.id, (leechHeals.get(attacker.id) || 0) + heal);
+      }
+
+      // Reflect Logic
+      if (!abilitiesLocked && target.unit?.type === UnitType.TITAN && (shields[target.id] > 0)) {
+        const reflect = 2 * sub.action.attackAp;
+        reflectedDmg.set(attacker.id, (reflectedDmg.get(attacker.id) || 0) + reflect);
+      }
+
+      logs.push({ 
+        attackerId: attacker.id, targetId: target.id, type: ActionType.ATTACK, 
+        damage: finalDmg, blocked: blocked,
+        resultMessage: `${attacker.name} targeted ${target.name} for ${baseDmg} damage. ${blocked} mitigated by defense.` 
+      });
+    });
+
+    // Apply all calculated HP changes at once
+    nextPlayers.forEach(p => {
+      const dmg = totalIncomingDamage.get(p.id) || 0;
+      const reflect = reflectedDmg.get(p.id) || 0;
+      const heal = leechHeals.get(p.id) || 0;
+      
+      const sub = submissions.find(s => s.playerId === p.id);
+      
+      if (sub) {
+        if (invincible[p.id]) {
+          logs.push({ attackerId: p.id, type: ActionType.PHASE, resultMessage: `${p.name} synchronized with Ghost Phase. Tactical immunity achieved.` });
+        } else if (sub.action.blockAp > 0) {
+          logs.push({ attackerId: p.id, type: ActionType.BLOCK, shield: shields[p.id], resultMessage: `${p.name} initialized ${sub.action.blockAp} AP Shield Protocol (+${shields[p.id]} HP Mitigation).` });
+        } else if (sub.action.blockAp === 0 && sub.action.attackAp === 0) {
+          logs.push({ attackerId: p.id, type: ActionType.RESERVE, resultMessage: `${p.name} bypassed aggressive protocols to reserve operational energy.` });
         }
       }
+
+      if (reflect > 0) {
+        logs.push({ attackerId: p.id, type: ActionType.BLOCK, reflected: reflect, resultMessage: `Backlash impact! ${p.name} hit by ${reflect} reflected damage.` });
+      }
+      if (heal > 0) {
+        logs.push({ attackerId: p.id, type: ActionType.PHASE, resultMessage: `${p.name} established health drain (+${heal} HP).` });
+      }
+
+      p.hp = Math.max(0, Math.min(INITIAL_HP, p.hp - dmg - reflect + heal));
     });
 
-    nextPlayers.forEach(p => {
-      if (p.hp <= 0 && !p.isEliminated) {
-        p.isEliminated = true;
-        p.hp = 0;
-      }
-      if (!p.isEliminated) {
-        const isOverload = p.unit?.type === UnitType.OVERLOAD && !abilitiesLocked;
-        p.ap = Math.min(isOverload ? 12 : 10, p.ap + (isOverload ? 3 : 2) + (p.apRefundNext || 0));
-        p.apRefundNext = 0;
-      }
-    });
+    // Mutual Destruction Detection
+    const aliveBefore = nextPlayers.filter(p => !p.isEliminated);
+    const aliveAfter = nextPlayers.filter(p => p.hp > 0);
+
+    if (aliveBefore.length >= 2 && aliveAfter.length === 0) {
+      logs.push({ 
+        attackerId: 'SYSTEM', type: ActionType.RESERVE, 
+        resultMessage: "CRITICAL: MUTUAL DESTRUCTION DETECTED. REBOOTING SURVIVORS. INITIATING SUDDEN DEATH PROTOCOL." 
+      });
+      // Revive for Sudden Death
+      aliveBefore.forEach(p => {
+        const actualPlayer = nextPlayers.find(x => x.id === p.id);
+        if (actualPlayer) {
+          actualPlayer.hp = 10;
+          actualPlayer.ap = 0; 
+          actualPlayer.isEliminated = false;
+        }
+      });
+    } else {
+      // Finalize status
+      nextPlayers.forEach(p => {
+        if (p.hp <= 0 && !p.isEliminated) {
+          p.isEliminated = true;
+          p.hp = 0;
+          // Mark the killing log as an elimination
+          const killLog = logs.find(l => l.targetId === p.id && l.type === ActionType.ATTACK);
+          if (killLog) killLog.isElimination = true;
+        }
+        if (!p.isEliminated) {
+          const isOverload = p.unit?.type === UnitType.OVERLOAD && !abilitiesLocked;
+          p.ap = Math.min(isOverload ? 12 : 10, p.ap + (isOverload ? 3 : 2) + (p.apRefundNext || 0));
+          p.apRefundNext = 0;
+        }
+      });
+    }
 
     setPlayers(nextPlayers);
     setResolutionLogs(logs);
     setPhase(Phase.RESOLUTION);
     setRound(round + 1);
     
-    const alive = nextPlayers.filter(p => !p.isEliminated);
-    if (alive.length <= 1) {
-      calculateEarnings(alive);
+    const finalAlive = nextPlayers.filter(p => !p.isEliminated);
+    if (finalAlive.length <= 1) {
+      calculateEarnings(finalAlive);
     }
   };
 
@@ -589,8 +617,9 @@ export function useGameState() {
     else {
       setCurrentTurnSubmissions([]);
       const firstAliveIdx = players.findIndex(p => !p.isEliminated);
-      setCurrentPlayerIdx(firstAliveIdx !== -1 ? firstAliveIdx : 0);
-      setPhase(players[firstAliveIdx].isAI ? Phase.TURN_ENTRY : Phase.PASS_PHONE);
+      const targetIdx = firstAliveIdx !== -1 ? firstAliveIdx : 0;
+      setCurrentPlayerIdx(targetIdx);
+      setPhase(players[targetIdx].isAI ? Phase.TURN_ENTRY : Phase.PASS_PHONE);
     }
   };
 
@@ -604,7 +633,7 @@ export function useGameState() {
     isLockedIn, setIsLockedIn, isExitConfirming, setIsExitConfirming,
     isHelpOpen, setIsHelpOpen, isSettingsOpen, setIsSettingsOpen, isAIThinking,
     localBlockAp, setLocalBlockAp, localAttackAp, setLocalAttackAp, localTargetId, setLocalTargetId,
-    timeLeft, setTimeLeft, sfxEnabled, setSfxEnabled, visualLevel, setVisualLevel,
+    timeLeft, setTimeLeft, sfxEnabled, setSfxEnabled, bgmEnabled, setBgmEnabled, bgmVolume, setBgmVolume, visualLevel, setVisualLevel,
     editingNameIdx, tempName, setTempName, startEditName, saveEditName, cancelEditName,
     credits, unlockedUnits, lastEarnedCredits, purchaseUnit, usePromoCode, highestLevelReached, currentCampaignLevel,
     stats,

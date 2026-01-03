@@ -20,11 +20,11 @@ export const BlackMarketView: React.FC<BlackMarketViewProps> = ({ game, onBack }
     
     return (
       <div key={tier} className="space-y-4">
-        <div className="flex items-center gap-3 border-b border-slate-800 pb-2">
+        <div className="flex items-center gap-3 border-b border-slate-800 pb-2 px-2">
            <Zap size={14} className="text-red-500" />
-           <h3 className="text-xs font-black uppercase text-slate-400 tracking-widest italic">Tier {tier} Operations</h3>
+           <h3 className="text-[10px] sm:text-xs font-black uppercase text-slate-400 tracking-widest italic">Tier {tier} Operations</h3>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-2">
            {unitsInTier.map(u => {
               const isUnlocked = unlockedUnits.includes(u.type);
               const price = UNIT_PRICES[u.type].cost;
@@ -72,26 +72,28 @@ export const BlackMarketView: React.FC<BlackMarketViewProps> = ({ game, onBack }
   return (
     <ScreenWrapper visualLevel={game.visualLevel} centerContent={false}>
        <GlobalHeader phase={Phase.STORE} onHelp={() => game.setIsHelpOpen(true)} onSettings={() => game.setIsSettingsOpen(true)} onExit={onBack} credits={credits} />
-       <div className="flex-1 p-6 flex flex-col items-center max-w-5xl mx-auto w-full pt-10 pb-28">
+       <div className="flex-1 p-4 sm:p-6 flex flex-col items-center max-w-5xl mx-auto w-full pt-10 pb-28">
           <div className="w-full space-y-12">
-             <div className="flex justify-between items-end gap-6">
-                <div className="space-y-2">
-                   <h2 className="text-5xl font-black italic uppercase text-white tracking-tighter">BLACK_MARKET</h2>
-                   <p className="text-slate-500 font-mono text-[9px] uppercase tracking-[0.4em]">Exchange Merit Data for experimental protocols</p>
+             <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-end gap-6 px-2">
+                <div className="space-y-2 flex-1 min-w-0">
+                   <h2 className="text-4xl sm:text-5xl font-black italic uppercase text-white tracking-tighter truncate">BLACK_MARKET</h2>
+                   <p className="text-slate-500 font-mono text-[9px] uppercase tracking-[0.4em] break-words">Exchange Merit Data for experimental protocols</p>
                 </div>
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl text-right min-w-[150px] shadow-2xl">
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-3xl text-right w-full sm:min-w-[150px] sm:w-auto shadow-2xl shrink-0 flex flex-col items-end justify-center">
                    <div className="text-[8px] font-mono text-slate-500 uppercase tracking-widest mb-1">Available Merit</div>
-                   <div className="text-2xl font-black text-sky-400 italic tracking-tighter">{credits} CR</div>
+                   <div className="text-2xl font-black text-sky-400 italic tracking-tighter leading-none">{credits} CR</div>
                 </div>
              </div>
 
-             <div className="space-y-16">
+             <div className="space-y-12 sm:space-y-16">
                 {[1, 2, 3].map(t => renderTier(t))}
              </div>
 
-             <Button variant="ghost" className="w-full py-4 rounded-3xl" onClick={onBack}>
-                <ChevronLeft size={16} /> Close Connection
-             </Button>
+             <div className="px-2 pb-10">
+              <Button variant="ghost" className="w-full py-4 rounded-3xl" onClick={onBack}>
+                  <ChevronLeft size={16} /> Close Connection
+              </Button>
+             </div>
           </div>
        </div>
     </ScreenWrapper>

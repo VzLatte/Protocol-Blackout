@@ -10,8 +10,15 @@ interface BottomNavProps {
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onTabChange, phase }) => {
-  // Hide bottom bar during Turn Entry and Splash phases
-  const isHidden = phase === Phase.TURN_ENTRY || phase === Phase.SPLASH;
+  // Hide bottom bar during all gameplay phases and splash
+  const isHidden = 
+    phase === Phase.SPLASH || 
+    phase === Phase.SETUP_PLAYERS || 
+    phase === Phase.BLACKOUT_SELECTION || 
+    phase === Phase.PASS_PHONE || 
+    phase === Phase.TURN_ENTRY || 
+    phase === Phase.RESOLUTION || 
+    phase === Phase.GAME_OVER;
   
   if (isHidden) return null;
 

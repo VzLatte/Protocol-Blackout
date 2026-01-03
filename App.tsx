@@ -18,8 +18,8 @@ import { OperativesListView } from './components/views/OperativesListView';
 import { BottomNav } from './components/layout/BottomNav';
 import { Modal } from './components/ui/Modal';
 import { Button } from './components/ui/Button';
-// Added Database to the imports from lucide-react
-import { AlertTriangle, Activity, Volume2, VolumeX, Share2, Info, MessageSquare, Shield, FileText, Gift, ChevronLeft, Target, Skull, Zap, Coins, Cpu, Globe, Database } from 'lucide-react';
+// Added Database and Music to the imports from lucide-react
+import { AlertTriangle, Activity, Volume2, VolumeX, Share2, Info, MessageSquare, Shield, FileText, Gift, ChevronLeft, Target, Skull, Zap, Coins, Cpu, Globe, Database, Music } from 'lucide-react';
 import { UNITS, CHAOS_DECK } from './constants';
 
 const App: React.FC = () => {
@@ -262,11 +262,11 @@ const App: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-10 mb-6">
-            <div className="bg-slate-950/50 p-6 rounded-3xl border border-slate-800 space-y-4">
+            <div className="bg-slate-950/50 p-4 sm:p-6 rounded-3xl border border-slate-800 space-y-4">
                <label className="text-[10px] font-mono uppercase text-slate-500 block tracking-widest flex items-center gap-2">
                   <Gift size={14} className="text-amber-500" /> Security Override Keys
                </label>
-               <div className="flex gap-2">
+               <div className="flex flex-col sm:flex-row gap-2">
                   <input 
                      type="text" 
                      value={promoCode} 
@@ -274,7 +274,7 @@ const App: React.FC = () => {
                      placeholder="ENTER_KEY"
                      className="flex-1 bg-black/60 border border-slate-800 p-3 rounded-2xl text-xs text-white font-mono uppercase focus:border-sky-500 outline-none"
                   />
-                  <Button variant="primary" size="sm" onClick={handlePromo} disabled={!promoCode}>Inject</Button>
+                  <Button variant="primary" size="sm" onClick={handlePromo} disabled={!promoCode} className="w-full sm:w-auto">Inject</Button>
                </div>
                {promoMessage && (
                  <div className="text-[9px] font-mono text-sky-400 uppercase tracking-widest animate-in fade-in slide-in-from-top-1">
@@ -287,20 +287,51 @@ const App: React.FC = () => {
               <div className="space-y-6">
                 <div>
                   <label className="text-[10px] font-mono uppercase text-slate-500 block mb-3 tracking-widest">Audio Feedback</label>
-                  <button 
-                    onClick={() => { game.setSfxEnabled(!game.sfxEnabled); playSfx('beep'); }}
-                    className={`w-full flex justify-between items-center p-4 rounded-2xl border transition-all ${game.sfxEnabled ? 'bg-sky-500/10 border-sky-500 text-sky-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {game.sfxEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-                      <span className="font-black uppercase text-[10px] tracking-widest">Effects</span>
-                    </div>
-                    <div className={`w-10 h-5 rounded-full relative transition-colors ${game.sfxEnabled ? 'bg-sky-500' : 'bg-slate-700'}`}>
+                  <div className="space-y-3">
+                    <button 
+                      onClick={() => { game.setSfxEnabled(!game.sfxEnabled); playSfx('beep'); }}
+                      className={`w-full flex justify-between items-center p-3 sm:p-4 rounded-2xl border transition-all ${game.sfxEnabled ? 'bg-sky-500/10 border-sky-500 text-sky-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {game.sfxEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+                        <span className="font-black uppercase text-[10px] tracking-widest">Effects</span>
+                      </div>
                       <div className={`w-10 h-5 rounded-full relative transition-colors ${game.sfxEnabled ? 'bg-sky-500' : 'bg-slate-700'}`}>
                         <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-300 ${game.sfxEnabled ? 'left-6' : 'left-1'}`}></div>
                       </div>
-                    </div>
-                  </button>
+                    </button>
+
+                    <button 
+                      onClick={() => { game.setBgmEnabled(!game.bgmEnabled); playSfx('beep'); }}
+                      className={`w-full flex justify-between items-center p-3 sm:p-4 rounded-2xl border transition-all ${game.bgmEnabled ? 'bg-sky-500/10 border-sky-500 text-sky-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {game.bgmEnabled ? <Music size={20} /> : <Music size={20} className="opacity-40" />}
+                        <span className="font-black uppercase text-[10px] tracking-widest">Music</span>
+                      </div>
+                      <div className={`w-10 h-5 rounded-full relative transition-colors ${game.bgmEnabled ? 'bg-sky-500' : 'bg-slate-700'}`}>
+                        <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-300 ${game.bgmEnabled ? 'left-6' : 'left-1'}`}></div>
+                      </div>
+                    </button>
+
+                    {game.bgmEnabled && (
+                      <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800 space-y-2 animate-in slide-in-from-top-2 duration-300">
+                        <div className="flex justify-between items-center text-[8px] font-mono text-slate-500 uppercase tracking-widest">
+                          <span>BGM Volume</span>
+                          <span className="text-sky-400">{Math.round(game.bgmVolume * 100)}%</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="0" 
+                          max="1" 
+                          step="0.05" 
+                          value={game.bgmVolume} 
+                          onChange={(e) => game.setBgmVolume(parseFloat(e.target.value))}
+                          className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div>
