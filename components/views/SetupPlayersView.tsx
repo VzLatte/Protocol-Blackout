@@ -3,7 +3,7 @@ import React from 'react';
 import { ScreenWrapper } from '../layout/ScreenWrapper';
 import { GlobalHeader } from '../layout/GlobalHeader';
 import { Button } from '../ui/Button';
-import { Edit2, Check, X, User, Cpu, Shield, Zap, Target } from 'lucide-react';
+import { Edit2, Check, X, User, Cpu, Shield, Zap, Target, Clock, Activity } from 'lucide-react';
 import { Phase, AIArchetype, AIDifficulty } from '../../types';
 
 interface SetupPlayersViewProps {
@@ -24,7 +24,7 @@ export const SetupPlayersView: React.FC<SetupPlayersViewProps> = ({ game }) => {
             
             <div className="space-y-10">
                {/* Global Settings */}
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+               <div className="space-y-6">
                   <div>
                      <label className="text-[10px] uppercase font-mono text-slate-500 mb-2 block tracking-widest">Operative Count</label>
                      <div className="grid grid-cols-5 gap-1.5">
@@ -33,19 +33,41 @@ export const SetupPlayersView: React.FC<SetupPlayersViewProps> = ({ game }) => {
                         ))}
                      </div>
                   </div>
-                  <div>
-                     <label className="text-[10px] font-mono uppercase text-slate-500 block mb-3 tracking-widest">Round Timer</label>
-                     <div className="flex items-center gap-4">
-                        <input 
-                          type="range" min="0" max="120" step="15"
-                          value={game.timeLimit} 
-                          onChange={(e) => { game.setTimeLimit(parseInt(e.target.value)); playSfx('beep'); }}
-                          className="flex-1 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-500"
-                        />
-                        <div className="bg-black/60 px-3 py-1.5 border border-slate-800 rounded-lg font-mono text-xs text-teal-400 min-w-[60px] text-center">
-                            {game.timeLimit === 0 ? 'INF' : `${game.timeLimit}s`}
-                        </div>
-                     </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                       <label className="text-[10px] font-mono uppercase text-slate-500 block mb-3 tracking-widest flex items-center gap-2">
+                          <Clock size={12}/> Round Timer
+                       </label>
+                       <div className="flex items-center gap-4">
+                          <input 
+                            type="range" min="0" max="120" step="15"
+                            value={game.timeLimit} 
+                            onChange={(e) => { game.setTimeLimit(parseInt(e.target.value)); playSfx('beep'); }}
+                            className="flex-1 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-500"
+                          />
+                          <div className="bg-black/60 px-3 py-1.5 border border-slate-800 rounded-lg font-mono text-xs text-teal-400 min-w-[60px] text-center">
+                              {game.timeLimit === 0 ? 'INF' : `${game.timeLimit}s`}
+                          </div>
+                       </div>
+                    </div>
+
+                    <div>
+                       <label className="text-[10px] font-mono uppercase text-slate-500 block mb-3 tracking-widest flex items-center gap-2">
+                          <Activity size={12}/> Oxygen Limit (Rounds)
+                       </label>
+                       <div className="flex items-center gap-4">
+                          <input 
+                            type="range" min="5" max="20" step="1"
+                            value={game.maxRounds} 
+                            onChange={(e) => { game.setMaxRounds(parseInt(e.target.value)); playSfx('beep'); }}
+                            className="flex-1 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-red-500"
+                          />
+                          <div className="bg-black/60 px-3 py-1.5 border border-slate-800 rounded-lg font-mono text-xs text-red-500 min-w-[60px] text-center">
+                              {game.maxRounds}
+                          </div>
+                       </div>
+                    </div>
                   </div>
                </div>
 

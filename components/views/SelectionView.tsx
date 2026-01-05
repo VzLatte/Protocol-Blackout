@@ -3,7 +3,7 @@ import React from 'react';
 import { ScreenWrapper } from '../layout/ScreenWrapper';
 import { GlobalHeader } from '../layout/GlobalHeader';
 import { Dna as DnaIcon, ChevronRight, Lock, Loader2, Cpu } from 'lucide-react';
-import { UNITS } from '../../constants';
+import { UNITS } from '../../operativeRegistry';
 import { Phase } from '../../types';
 
 interface SelectionViewProps {
@@ -23,7 +23,7 @@ export const SelectionView: React.FC<SelectionViewProps> = ({ game }) => {
             <Loader2 size={80} className="absolute -top-2 -left-2 animate-spin text-amber-500 opacity-40" />
           </div>
           <div className="space-y-2 text-center">
-            <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter">{p.name}</h2>
+            <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter glitch-text">{p.name}</h2>
             <p className="text-amber-500 font-mono text-[10px] uppercase tracking-[0.3em]">AI Establishing Combat Identity...</p>
           </div>
         </div>
@@ -38,7 +38,7 @@ export const SelectionView: React.FC<SelectionViewProps> = ({ game }) => {
         <div key={game.currentPlayerIdx} className={`p-6 max-w-5xl mx-auto space-y-8 pb-32 animate-in slide-in-from-right duration-500 ${game.isLockedIn ? 'opacity-30 blur-sm scale-95 transition-all duration-1000 pointer-events-none' : ''}`}>
           <div className="text-center pt-4">
             <div className="text-teal-500 font-mono text-[8px] uppercase tracking-[0.6em] mb-2">IDENT_SELECTION [{game.currentPlayerIdx + 1}/{game.setupCount}]</div>
-            <h2 className="text-3xl sm:text-4xl font-black text-white italic uppercase tracking-tighter mb-2 truncate px-4">{p.name}</h2>
+            <h2 className="text-3xl sm:text-4xl font-black text-white italic uppercase tracking-tighter mb-2 truncate px-4 glitch-text">{p.name}</h2>
             <p className="text-slate-500 font-mono text-[9px] uppercase tracking-widest">Select combat protocol.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 px-2">

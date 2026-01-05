@@ -29,7 +29,8 @@ export function calculateAIMove(
     case AIArchetype.STRATEGIST:
       return calculateStrategistMove(aiPlayer, opponents, availableAp, history);
     default:
-      return { blockAp: 0, attackAp: 0 };
+      // Fixed: Added abilityActive: false
+      return { blockAp: 0, attackAp: 0, moveAp: 0, abilityActive: false };
   }
 }
 
@@ -38,7 +39,8 @@ function generateRandomValidMove(ap: number, opponents: Player[]): Action {
   const remaining = ap - block;
   const attack = Math.floor(Math.random() * (remaining + 1));
   const target = opponents[Math.floor(Math.random() * opponents.length)]?.id;
-  return { blockAp: block, attackAp: attack, targetId: attack > 0 ? target : undefined };
+  // Fixed: Added abilityActive: false
+  return { blockAp: block, attackAp: attack, moveAp: 0, targetId: attack > 0 ? target : undefined, abilityActive: false };
 }
 
 function calculateTurtleMove(ai: Player, opponents: Player[], ap: number): Action {
@@ -50,12 +52,14 @@ function calculateTurtleMove(ai: Player, opponents: Player[], ap: number): Actio
     attackAp = 1;
     targetId = opponents.sort((a, b) => a.hp - b.hp)[0]?.id;
   }
-  return { blockAp, attackAp, targetId };
+  // Fixed: Added abilityActive: false
+  return { blockAp, attackAp, moveAp: 0, targetId, abilityActive: false };
 }
 
 function calculateAggroMove(ai: Player, opponents: Player[], ap: number): Action {
   const targetId = opponents.sort((a, b) => a.hp - b.hp)[0]?.id;
-  return { blockAp: 0, attackAp: ap, targetId };
+  // Fixed: Added abilityActive: false
+  return { blockAp: 0, attackAp: ap, moveAp: 0, targetId, abilityActive: false };
 }
 
 function calculateStrategistMove(ai: Player, opponents: Player[], ap: number, history: TurnData[][]): Action {
@@ -109,5 +113,6 @@ function calculateStrategistMove(ai: Player, opponents: Player[], ap: number, hi
     targetId = opponents.sort((a, b) => a.hp - b.hp)[0]?.id;
   }
 
-  return { blockAp, attackAp, targetId };
+  // Fixed: Added abilityActive: false
+  return { blockAp, attackAp, moveAp: 0, targetId, abilityActive: false };
 }

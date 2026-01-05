@@ -51,7 +51,7 @@ export const GameTypeSelectionView: React.FC<GameTypeSelectionViewProps> = ({
                   <Users size={28} />
                </div>
                <div>
-                  <h2 className="text-3xl font-black italic uppercase text-white mb-1 group-hover:text-amber-400 transition-colors">Custom</h2>
+                  <h2 className="text-3xl font-black italic uppercase text-white mb-1 group-hover:text-amber-400 transition-colors">Sandbox</h2>
                   <p className="text-slate-500 text-[9px] font-mono uppercase tracking-widest leading-relaxed">
                      2-6 players single-device tactical combat.
                   </p>

@@ -18,9 +18,9 @@ import { OperativesListView } from './components/views/OperativesListView';
 import { BottomNav } from './components/layout/BottomNav';
 import { Modal } from './components/ui/Modal';
 import { Button } from './components/ui/Button';
-// Added Database and Music to the imports from lucide-react
 import { AlertTriangle, Activity, Volume2, VolumeX, Share2, Info, MessageSquare, Shield, FileText, Gift, ChevronLeft, Target, Skull, Zap, Coins, Cpu, Globe, Database, Music } from 'lucide-react';
-import { UNITS, CHAOS_DECK } from './constants';
+import { CHAOS_DECK } from './constants';
+import { UNITS } from './operativeRegistry';
 
 const App: React.FC = () => {
   const game = useGameState();
@@ -98,7 +98,7 @@ const App: React.FC = () => {
       return <ArchiveView game={game} onBack={() => setCurrentTab(Tab.TERMINAL)} />;
     }
     if (currentTab === Tab.OPERATIVES) {
-      return <OperativesListView unlockedUnits={game.unlockedUnits} visualLevel={game.visualLevel} onHelp={() => game.setIsHelpOpen(true)} onSettings={() => game.setIsSettingsOpen(true)} credits={game.credits} />;
+      return <OperativesListView game={game} onHelp={() => game.setIsHelpOpen(true)} onSettings={() => game.setIsSettingsOpen(true)} />;
     }
 
     // TERMINAL TAB
@@ -155,7 +155,7 @@ const App: React.FC = () => {
         phase={game.phase} 
       />
 
-      {/* Help Modal - Complete Game Manual */}
+      {/* Help Modal */}
       <Modal 
         isOpen={game.isHelpOpen} 
         onClose={() => game.setIsHelpOpen(false)} 
@@ -185,24 +185,6 @@ const App: React.FC = () => {
            </section>
 
            <section className="space-y-4">
-              <h3 className="text-white font-black mb-3 uppercase text-[10px] tracking-widest border-b border-amber-500/30 pb-2 flex items-center gap-2"><Shield size={16} className="text-amber-400"/> THE STRATEGY TRIANGLE</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                 <div className="bg-red-950/20 p-4 rounded-xl border border-red-900/50 text-center">
-                    <div className="text-[10px] font-black text-red-400 uppercase mb-2">Aggro</div>
-                    <div className="text-[8px] text-slate-400 font-mono">Aggressive players win by breaking 'Greedy' hoarders.</div>
-                 </div>
-                 <div className="bg-teal-950/20 p-4 rounded-xl border border-teal-900/50 text-center">
-                    <div className="text-[10px] font-black text-teal-400 uppercase mb-2">Greed</div>
-                    <div className="text-[8px] text-slate-400 font-mono">Reserving energy beats passive 'Stall' players.</div>
-                 </div>
-                 <div className="bg-amber-950/20 p-4 rounded-xl border border-amber-900/50 text-center">
-                    <div className="text-[10px] font-black text-amber-400 uppercase mb-2">Stall</div>
-                    <div className="text-[8px] text-slate-400 font-mono">Defensive protocols exhaust 'Aggro' spenders.</div>
-                 </div>
-              </div>
-           </section>
-
-           <section className="space-y-4">
               <h3 className="text-white font-black mb-3 uppercase text-[10px] tracking-widest border-b border-sky-500/30 pb-2 flex items-center gap-2"><Globe size={16} className="text-sky-400"/> CHAOS EVENTS</h3>
               <p className="text-[10px] text-slate-500 font-mono mb-4 uppercase">Chaos mode introduces environmental variables every round:</p>
               <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-2">
@@ -218,7 +200,7 @@ const App: React.FC = () => {
            <section className="space-y-4">
               <h3 className="text-white font-black mb-3 uppercase text-[10px] tracking-widest border-b border-sky-500/30 pb-2 flex items-center gap-2"><Database size={16} className="text-sky-400"/> PROGRESSION & MERIT</h3>
               <p className="text-xs text-slate-400 leading-relaxed font-mono">
-                Winning simulations grants <span className="text-sky-400 font-bold">Data Credits (CR)</span>. Use these in the Black Market to unlock experimental units. Completion of the campaign nodes also unlocks new tiers of operatives.
+                Winning simulations grants <span className="text-sky-400 font-bold">Data Credits (CR)</span>. Use these in the <span className="text-teal-400 font-bold">Operatives Terminal</span> to unlock experimental units. Completion of the campaign nodes also unlocks new tiers of operatives.
               </p>
            </section>
 

@@ -33,12 +33,18 @@ export enum Phase {
 
 export enum UnitType {
   GHOST = 'GHOST',
-  TITAN = 'TITAN',
   REAPER = 'REAPER',
+  AEGIS = 'AEGIS',
+  PYRUS = 'PYRUS',
+  TROJAN = 'TROJAN',
+  KILLSHOT = 'KILLSHOT',
+  HUNTER = 'HUNTER',
+  RAVEN = 'RAVEN',
+  PYTHON = 'PYTHON',
+  MEDIC = 'MEDIC',
   LEECH = 'LEECH',
-  OVERLOAD = 'OVERLOAD',
-  MASK = 'MASK',
-  GAMBLER = 'GAMBLER'
+  BATTERY = 'BATTERY',
+  STATIC = 'STATIC'
 }
 
 export enum AIArchetype {
@@ -53,9 +59,9 @@ export enum AIDifficulty {
   HARD = 'HARD'
 }
 
-export interface AIConfig {
-  archetype: AIArchetype;
-  difficulty: AIDifficulty;
+export interface StatusEffect {
+  type: 'BURN' | 'POISON' | 'PARALYZE';
+  duration: number;
 }
 
 export interface Unit {
@@ -63,10 +69,21 @@ export interface Unit {
   name: string;
   role: string;
   description: string;
+  // Summary of the unit's main tactical advantage
+  special: string;
   hp: number;
   maxHp: number;
-  special: string;
+  speed: number;
+  focus: number;
+  passiveDesc: string;
+  activeDesc: string;
+  cooldownMax: number; // -1 for once per game
   truth: string;
+}
+
+export interface AIConfig {
+  archetype: AIArchetype;
+  difficulty: AIDifficulty;
 }
 
 export interface Player {
@@ -76,26 +93,47 @@ export interface Player {
   hp: number;
   maxHp: number;
   ap: number;
+  fatigue: number; 
   isEliminated: boolean;
   isAI: boolean;
   aiConfig?: AIConfig;
-  bountyOn?: string;
-  apRefundNext?: number;
-  originalType?: UnitType;
+  totalReservedAp: number;
+  cooldown: number;
+  activeUsed: boolean;
+  statuses: StatusEffect[];
+  isAbilityActive: boolean;
+  targetLockId?: string; // For Hunter's mark
+  overclockTurns?: number; // For Trojan
 }
 
 export enum ActionType {
   ATTACK = 'ATTACK',
   BLOCK = 'BLOCK',
-  BOUNTY = 'BOUNTY',
+  MOVE = 'MOVE', 
   RESERVE = 'RESERVE',
-  PHASE = 'PHASE'
+  PHASE = 'PHASE',
+  ABILITY = 'ABILITY',
+  BOUNTY = 'BOUNTY'
+}
+
+export enum RangeZone {
+  CLOSE = 'CLOSE',
+  MID = 'MID',
+  FAR = 'FAR'
+}
+
+export enum MoveIntent {
+  CLOSE = 'CLOSE',
+  OPEN = 'OPEN'
 }
 
 export interface Action {
   blockAp: number;
   attackAp: number;
+  moveAp: number;
+  abilityActive: boolean;
   targetId?: string;
+  moveIntent?: MoveIntent;
 }
 
 export interface TurnData {
@@ -105,12 +143,24 @@ export interface TurnData {
 
 export interface ResolutionLog {
   attackerId: string;
+  attackerName?: string;
   targetId?: string;
+  targetName?: string;
   type: ActionType;
   damage?: number;
-  blocked?: number;
-  reflected?: number;
-  shield?: number;
+  mitigatedAmount?: number;
+  shield?: number; 
+  apSpent?: number;
   resultMessage: string;
   isElimination?: boolean;
+  isCracked?: boolean;
+  mitigationPercent?: number;
+  defenseTier?: number;
+  rangeChange?: string;
+  fatigueGain?: number;
+}
+
+export interface TutorialState {
+  step: number;
+  isActive: boolean;
 }
