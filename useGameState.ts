@@ -269,6 +269,16 @@ export function useGameState() {
     }
   }, [phase, currentPlayerIdx, players, unlockedUnits]);
 
+  // AUTO-TRANSITION PassPhone for AI
+  useEffect(() => {
+    if (phase === Phase.PASS_PHONE && players[currentPlayerIdx]?.isAI) {
+      const timer = setTimeout(() => {
+        setPhase(Phase.TURN_ENTRY);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [phase, currentPlayerIdx, players]);
+
   // Fix AI Turn Entry Logic
   useEffect(() => {
     if (phase === Phase.TURN_ENTRY && players[currentPlayerIdx]?.isAI) {
@@ -277,7 +287,7 @@ export function useGameState() {
         const aiMove = calculateAIMove(players[currentPlayerIdx], players, fullHistory, round);
         submitAction(aiMove);
         setIsAIThinking(false);
-      }, 2000);
+      }, 2500); // Slightly longer for "thinking" UX
       return () => clearTimeout(timer);
     }
   }, [phase, currentPlayerIdx, players]);
@@ -292,7 +302,7 @@ export function useGameState() {
     while (nextIdx < players.length && players[nextIdx].isEliminated) nextIdx++;
     if (nextIdx < players.length) {
       setCurrentPlayerIdx(nextIdx);
-      setPhase(players[nextIdx].isAI ? Phase.TURN_ENTRY : Phase.PASS_PHONE);
+      setPhase(Phase.PASS_PHONE); // Always show pass phone view
     } else resolveTurn(nextSubmissions);
   };
 
@@ -326,7 +336,7 @@ export function useGameState() {
       setCurrentTurnSubmissions([]);
       const firstAliveIdx = players.findIndex(p => !p.isEliminated);
       setCurrentPlayerIdx(firstAliveIdx);
-      setPhase(players[firstAliveIdx].isAI ? Phase.TURN_ENTRY : Phase.PASS_PHONE);
+      setPhase(Phase.PASS_PHONE); // Always go to pass phone view
     }
   };
 

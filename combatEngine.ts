@@ -32,24 +32,27 @@ export function resolveCombat(
         p.ap += 4;
         p.hp -= 100;
         p.activeUsed = true;
-        logs.push({ attackerId: p.id, type: ActionType.ABILITY, resultMessage: "OVERCHARGE: +4 AP, -100 HP" });
+        logs.push({ attackerId: p.id, type: ActionType.ABILITY, resultMessage: "OVERCHARGE_ACTIVE: +4 AP // SYSTEM_STRAIN: -100 HP" });
       } else if (p.unit?.type === UnitType.MEDIC) {
         p.hp = Math.min(p.maxHp, p.hp + 400);
         p.activeUsed = true;
-        logs.push({ attackerId: p.id, type: ActionType.ABILITY, resultMessage: "EMERGENCY PATCH: +400 HP" });
+        logs.push({ attackerId: p.id, type: ActionType.ABILITY, resultMessage: "EMERGENCY_PATCH_SUCCESS: +400 HP RECOVERED" });
       } else if (p.unit?.type === UnitType.HUNTER && sub.action.targetId) {
         p.targetLockId = sub.action.targetId;
         p.activeUsed = true;
-        logs.push({ attackerId: p.id, type: ActionType.ABILITY, resultMessage: `TARGET LOCKED: ${nextPlayers.find(x => x.id === sub.action.targetId)?.name}` });
+        logs.push({ attackerId: p.id, type: ActionType.ABILITY, resultMessage: `TARGET_LOCKED: ${nextPlayers.find(x => x.id === sub.action.targetId)?.name}` });
       } else if (p.unit?.type === UnitType.TROJAN) {
         p.overclockTurns = 3;
         p.activeUsed = true;
-        logs.push({ attackerId: p.id, type: ActionType.ABILITY, resultMessage: "OVERCLOCK ACTIVATED: DEFENSE PIERCE ARMED" });
+        logs.push({ attackerId: p.id, type: ActionType.ABILITY, resultMessage: "OVERCLOCK_INITIATED: SHIELD_PIERCE_ENABLED" });
+      } else if (p.unit?.type === UnitType.LEECH) {
+        // Handled in damage step for lifesteal rate, but log activation here
+        logs.push({ attackerId: p.id, type: ActionType.ABILITY, resultMessage: "SIPHON_SOUL_ARMED: 100% LIFESTEAL" });
       }
     }
   });
 
-  // --- Step 1: AP Deduction & Costing ---
+  // --- Step 1: AP Deduction & Costing & Reservation Logging ---
   submissions.forEach(sub => {
     const p = nextPlayers.find(x => x.id === sub.playerId)!;
     const moveCost = ACTION_COSTS[ActionType.MOVE] + (p.fatigue || 0);
@@ -61,11 +64,20 @@ export function resolveCombat(
     p.ap -= cost;
     p.totalReservedAp += Math.max(0, reserved);
 
+    if (reserved > 0) {
+      logs.push({ 
+        attackerId: p.id, 
+        type: ActionType.RESERVE, 
+        apSpent: 0, 
+        resultMessage: `ENERGY_RESERVED: +${reserved} AP STORED` 
+      });
+    }
+
     // Python Neural Paralysis check for targets
     const paralyzer = submissions.find(s => s.action.abilityActive && nextPlayers.find(np => np.id === s.playerId)?.unit?.type === UnitType.PYTHON && s.action.targetId === p.id);
     if (paralyzer && reserved > 0) {
       p.ap -= reserved; // Force lose reserved AP
-      logs.push({ attackerId: "SYSTEM", targetId: p.id, type: ActionType.PHASE, resultMessage: "NEURAL PARALYSIS: UNSPENT AP PURGED" });
+      logs.push({ attackerId: paralyzer.playerId, targetId: p.id, type: ActionType.PHASE, resultMessage: "NEURAL_PARALYSIS: UNSPENT_AP_PURGED" });
     }
   });
 
@@ -88,19 +100,19 @@ export function resolveCombat(
             const dir = move.action.moveIntent === MoveIntent.CLOSE ? -1 : 1;
             const newDist = Math.max(0, Math.min(2, currentDist + dir));
             nextDistanceMatrix.set(pairKey, newDist);
-            logs.push({ attackerId: "SYSTEM", type: ActionType.MOVE, resultMessage: `MUTUAL MANEUVER: ${mover.name} & ${target.name}`, rangeChange: `${RANGE_NAMES[currentDist]} -> ${RANGE_NAMES[newDist]}` });
+            logs.push({ attackerId: mover.id, targetId: target.id, type: ActionType.MOVE, resultMessage: `MUTUAL_MANEUVER: ${mover.name} & ${target.name}`, rangeChange: `${RANGE_NAMES[currentDist]} -> ${RANGE_NAMES[newDist]}` });
             fatigueUpdates.set(mover.id, 1); fatigueUpdates.set(target.id, 1);
         } else {
              const mSpd = mover.unit?.speed || 5; const tSpd = target.unit?.speed || 5;
              if (Math.abs(mSpd - tSpd) < 2) {
-                logs.push({ attackerId: "SYSTEM", type: ActionType.MOVE, resultMessage: `MOVEMENT STALEMATE: ${mover.name} vs ${target.name}` });
+                logs.push({ attackerId: "SYSTEM", type: ActionType.MOVE, resultMessage: `MOVEMENT_STALEMATE: ${mover.name} vs ${target.name}` });
                 fatigueUpdates.set(mover.id, 2); fatigueUpdates.set(target.id, 2);
              } else {
                 const winner = mSpd > tSpd ? mover : target; const wMove = mSpd > tSpd ? move : targetMove;
                 const dir = wMove.action.moveIntent === MoveIntent.CLOSE ? -1 : 1;
                 const newDist = Math.max(0, Math.min(2, currentDist + dir));
                 nextDistanceMatrix.set(pairKey, newDist);
-                logs.push({ attackerId: winner.name, type: ActionType.MOVE, resultMessage: `SPEED CHECK WON`, rangeChange: `${RANGE_NAMES[currentDist]} -> ${RANGE_NAMES[newDist]}` });
+                logs.push({ attackerId: winner.id, type: ActionType.MOVE, resultMessage: `SPEED_CHECK_WON`, rangeChange: `${RANGE_NAMES[currentDist]} -> ${RANGE_NAMES[newDist]}` });
                 fatigueUpdates.set(mover.id, 1); fatigueUpdates.set(target.id, 2);
              }
         }
@@ -109,9 +121,15 @@ export function resolveCombat(
         const dir = move.action.moveIntent === MoveIntent.CLOSE ? -1 : 1;
         const newDist = Math.max(0, Math.min(2, currentDist + dir));
         nextDistanceMatrix.set(pairKey, newDist);
-        logs.push({ attackerId: mover.name, type: ActionType.MOVE, resultMessage: `MANEUVER SUCCESS vs ${target.name}`, rangeChange: `${RANGE_NAMES[currentDist]} -> ${RANGE_NAMES[newDist]}` });
+        logs.push({ attackerId: mover.id, targetId: target.id, type: ActionType.MOVE, resultMessage: `MANEUVER_SUCCESS vs ${target.name}`, rangeChange: `${RANGE_NAMES[currentDist]} -> ${RANGE_NAMES[newDist]}` });
         fatigueUpdates.set(mover.id, 1);
      }
+  });
+
+  // Apply Fatigue Updates
+  fatigueUpdates.forEach((value, id) => {
+    const p = nextPlayers.find(x => x.id === id);
+    if (p) p.fatigue = (p.fatigue || 0) + value;
   });
 
   // --- Step 3: Offense Logic ---
@@ -124,7 +142,7 @@ export function resolveCombat(
     // Ghost Check
     if (p.unit?.type === UnitType.GHOST && sub.action.abilityActive) {
       if (sub.action.attackAp > 0) {
-        logs.push({ attackerId: p.id, type: ActionType.ATTACK, resultMessage: "GHOST: ATTACK FAILED (Cannot attack while shifted)" });
+        logs.push({ attackerId: p.id, type: ActionType.ATTACK, resultMessage: "GHOST_SHIFT: ATTACK_FAILURE (Combat disabled)" });
         return;
       }
     }
@@ -135,7 +153,7 @@ export function resolveCombat(
       // Untargetable Check (Ghost Active)
       const targetSub = submissions.find(s => s.playerId === target.id);
       if (target.unit?.type === UnitType.GHOST && targetSub?.action.abilityActive) {
-        logs.push({ attackerId: p.id, type: ActionType.ATTACK, resultMessage: `MISS: ${target.name} is Phase Shifted` });
+        logs.push({ attackerId: p.id, type: ActionType.ATTACK, resultMessage: `MISS: ${target.name} is PHASE_SHIFTED` });
         return;
       }
 
@@ -155,7 +173,7 @@ export function resolveCombat(
       // Reaper Execution
       if (p.unit?.type === UnitType.REAPER && sub.action.abilityActive && target.hp < 250) {
         finalDmg = 9999;
-        logs.push({ attackerId: p.id, type: ActionType.ABILITY, resultMessage: "FINAL HARVEST: LETHAL EXECUTION" });
+        logs.push({ attackerId: p.id, type: ActionType.ABILITY, resultMessage: "FINAL_HARVEST: LETHAL_EXECUTION_TRIGGERED" });
       }
 
       // Trojan Shield Pierce Logic
@@ -163,11 +181,10 @@ export function resolveCombat(
       if (p.unit?.type === UnitType.TROJAN) {
         if (p.overclockTurns && p.overclockTurns > 0) {
           isShieldPierce = true;
-          // Note: Consume turns handled later or per-point? User said "next 3 attack points". 
-          // We'll treat it as 3 points of attack across turns.
+          // Reduction of overclock turns happens in income step now for clarity
         } else if (Math.random() < 0.15) {
           isShieldPierce = true;
-          logs.push({ attackerId: p.id, type: ActionType.PHASE, resultMessage: "SHIELD PIERCE PROCCED" });
+          logs.push({ attackerId: p.id, type: ActionType.PHASE, resultMessage: "CRITICAL_SYSTEM_BYPASS: SHIELD_PIERCE_PROC" });
         }
       }
 
@@ -193,9 +210,8 @@ export function resolveCombat(
       incomingDmg.set(target.id, (incomingDmg.get(target.id) || 0) + 100);
       attackMap.push({ attackerId: p.id, targetId: target.id, dmg: 100, isShieldPierce: false });
       if (Math.random() < 0.5) {
-        // Drain 1 AP next turn logic
         target.ap = Math.max(0, target.ap - 1);
-        logs.push({ attackerId: p.id, type: ActionType.ABILITY, resultMessage: "FIREWALL: DRAINED 1 AP" });
+        logs.push({ attackerId: p.id, type: ActionType.ABILITY, resultMessage: "FIREWALL_ACTIVE: -1 AP DRAINED FROM TARGET" });
       }
     }
 
@@ -205,7 +221,7 @@ export function resolveCombat(
        const freeDmg = Math.floor(BASE_ATTACK_DMG * 1.1 * 2); 
        incomingDmg.set(target.id, (incomingDmg.get(target.id) || 0) + freeDmg);
        attackMap.push({ attackerId: p.id, targetId: target.id, dmg: freeDmg, isShieldPierce: false });
-       logs.push({ attackerId: p.id, type: ActionType.ABILITY, resultMessage: "DOUBLE TAP: 2 FREE SHOTS" });
+       logs.push({ attackerId: p.id, type: ActionType.ABILITY, resultMessage: "DOUBLE_TAP_SUCCESS: 2 FREE_BURST_ATTACKS" });
     }
   });
 
@@ -219,6 +235,7 @@ export function resolveCombat(
     // Aegis Active Check
     if (p.unit?.type === UnitType.AEGIS && sub?.action.abilityActive) {
       finalMitigation.set(p.id, { percent: 0.8, isCracked: false });
+      logs.push({ attackerId: p.id, type: ActionType.BLOCK, resultMessage: "TITAN_SHIELD_DEPLOYED: 80% MITIGATION" });
       return;
     }
 
@@ -230,6 +247,16 @@ export function resolveCombat(
     if (p.unit?.type === UnitType.AEGIS) percent += 0.1;
 
     finalMitigation.set(p.id, { percent, isCracked });
+    
+    if (tier > 0) {
+      logs.push({ 
+        attackerId: p.id, 
+        type: ActionType.BLOCK, 
+        defenseTier: tier, 
+        isCracked, 
+        resultMessage: isCracked ? `BARRIER_CRACKED: ${Math.round(percent*100)}% DR LEFT` : `BARRIER_HOLDING: ${Math.round(percent*100)}% DR` 
+      });
+    }
   });
 
   // --- Step 5: Damage Application & Reflection ---
@@ -250,23 +277,18 @@ export function resolveCombat(
        attacker.hp = Math.min(attacker.maxHp, attacker.hp + Math.floor(damageTaken * lifestealRate));
      }
 
-     // Battery Kinetic Storage
-     if (target.unit?.type === UnitType.BATTERY && damageTaken > 0) {
-       // Gain bonus handled in income
-     }
-
      logs.push({
        attackerId: attacker.id, attackerName: attacker.name, targetId: target.id, targetName: target.name,
        type: ActionType.ATTACK, damage: damageTaken, mitigatedAmount: Math.floor(att.dmg * mitApplied),
-       resultMessage: `Impact: ${damageTaken} HP`
+       resultMessage: `IMPACT: ${damageTaken} HP ${att.isShieldPierce ? '(PIERCED)' : ''}`
      });
   });
 
   // --- Step 6: Status Ticks ---
   nextPlayers.forEach(p => {
     p.statuses = p.statuses.filter(s => {
-      if (s.type === 'BURN') { p.hp -= 50; logs.push({ attackerId: "SYSTEM", targetId: p.id, type: ActionType.PHASE, resultMessage: "BURN DAMAGE: -50 HP" }); }
-      if (s.type === 'POISON') { p.hp -= 40; logs.push({ attackerId: "SYSTEM", targetId: p.id, type: ActionType.PHASE, resultMessage: "POISON DAMAGE: -40 HP" }); }
+      if (s.type === 'BURN') { p.hp -= 50; logs.push({ attackerId: "SYSTEM", targetId: p.id, type: ActionType.PHASE, resultMessage: "STATUS_BURN: -50 HP" }); }
+      if (s.type === 'POISON') { p.hp -= 40; logs.push({ attackerId: "SYSTEM", targetId: p.id, type: ActionType.PHASE, resultMessage: "STATUS_TOXIN: -40 HP" }); }
       s.duration--;
       return s.duration > 0;
     });
@@ -280,7 +302,7 @@ export function resolveCombat(
      
      deadThisRound.forEach(p => { if (p.id !== winner.id) p.isEliminated = true; });
      winner.hp = 1; // Pyrrhic winner stays at 1 HP
-     logs.push({ attackerId: winner.id, type: ActionType.PHASE, resultMessage: `PYRRHIC VICTOR (Initiative: ${winner.unit?.speed})` });
+     logs.push({ attackerId: winner.id, type: ActionType.PHASE, resultMessage: `PYRRHIC_VICTOR: INITIATIVE_ADVANTAGE (${winner.unit?.speed})` });
   } else {
      deadThisRound.forEach(p => p.isEliminated = true);
   }
@@ -296,7 +318,7 @@ export function resolveCombat(
          nextPlayers.forEach(other => {
             if (other.id !== p.id && other.ap > calculateIncome(0, nextRound)) {
                other.hp -= 50;
-               logs.push({ attackerId: p.id, type: ActionType.PHASE, resultMessage: `FEEDBACK LOOP: ${other.name} took 50 DMG` });
+               logs.push({ attackerId: p.id, type: ActionType.PHASE, resultMessage: `FEEDBACK_LOOP: AGGRESSIVE_RESERVE_PENALTY -> ${other.name}` });
             }
          });
       }
@@ -314,7 +336,12 @@ export function resolveCombat(
 
       p.ap = income;
       if (p.cooldown > 0) p.cooldown--;
-      if (p.overclockTurns) p.overclockTurns = Math.max(0, p.overclockTurns - (submissions.find(s => s.playerId === p.id)?.action.attackAp || 0));
+      
+      // Reduce Overclock Turns correctly based on attack points used
+      const mySub = submissions.find(s => s.playerId === p.id);
+      if (p.overclockTurns) {
+        p.overclockTurns = Math.max(0, p.overclockTurns - (mySub?.action.attackAp || 0));
+      }
     }
   });
 
