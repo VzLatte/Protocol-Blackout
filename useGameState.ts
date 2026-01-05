@@ -143,7 +143,7 @@ export function useGameState() {
   const usePromoCode = (code: string) => {
     const normalized = code.toUpperCase().trim();
     if (usedPromoCodes.includes(normalized)) return "CODE_ALREADY_REDEEMED";
-    if (normalized === 'OPERATIVE_OVERRIDE') {
+    if (normalized === 'TEST_UNLOCK') {
       setUnlockedUnits(Object.values(UnitType));
       setUsedPromoCodes(prev => [...prev, normalized]);
       playSfx('success');
@@ -179,6 +179,17 @@ export function useGameState() {
     setFogOfWarActive(0);
     setDistanceMatrix(new Map());
     setCurrentCampaignLevel(null);
+  };
+
+  const initDistances = (pList: Player[]) => {
+    const newMatrix = new Map<string, number>();
+    for (let i = 0; i < pList.length; i++) {
+      for (let j = i + 1; j < pList.length; j++) {
+         const key = [pList[i].id, pList[j].id].sort().join('-');
+         newMatrix.set(key, 1); // MID
+      }
+    }
+    setDistanceMatrix(newMatrix);
   };
 
   const startCampaignLevel = (lvl: number) => {
@@ -225,17 +236,6 @@ export function useGameState() {
     setFogOfWarActive(0);
   };
 
-  const initDistances = (pList: Player[]) => {
-    const newMatrix = new Map<string, number>();
-    for (let i = 0; i < pList.length; i++) {
-      for (let j = i + 1; j < pList.length; j++) {
-         const key = [pList[i].id, pList[j].id].sort().join('-');
-         newMatrix.set(key, 1); // MID
-      }
-    }
-    setDistanceMatrix(newMatrix);
-  };
-
   const selectUnit = (type: UnitType) => {
     const nextPlayers = [...players];
     const u = UNITS[type];
@@ -246,9 +246,41 @@ export function useGameState() {
     setConfirmingUnit(null);
     let nextIdx = currentPlayerIdx + 1;
     while (nextIdx < players.length && players[nextIdx].isEliminated) nextIdx++;
-    if (nextIdx < players.length) setCurrentPlayerIdx(nextIdx);
-    else { setCurrentPlayerIdx(0); setPhase(Phase.PASS_PHONE); }
+    if (nextIdx < players.length) {
+      setCurrentPlayerIdx(nextIdx);
+    } else { 
+      setCurrentPlayerIdx(0); 
+      setPhase(Phase.PASS_PHONE); 
+    }
   };
+
+  // Fix AI Unit Selection Hang
+  useEffect(() => {
+    if (phase === Phase.BLACKOUT_SELECTION && players[currentPlayerIdx]?.isAI) {
+      const timer = setTimeout(() => {
+        const availableTypes = Object.values(UnitType);
+        // AI selects from its unlocked or default set (assuming starters at minimum)
+        const starters = [UnitType.GHOST, UnitType.AEGIS, UnitType.REAPER];
+        const unlocked = availableTypes.filter(t => unlockedUnits.includes(t) || starters.includes(t));
+        const randomUnit = unlocked[Math.floor(Math.random() * unlocked.length)];
+        selectUnit(randomUnit);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [phase, currentPlayerIdx, players, unlockedUnits]);
+
+  // Fix AI Turn Entry Logic
+  useEffect(() => {
+    if (phase === Phase.TURN_ENTRY && players[currentPlayerIdx]?.isAI) {
+      setIsAIThinking(true);
+      const timer = setTimeout(() => {
+        const aiMove = calculateAIMove(players[currentPlayerIdx], players, fullHistory, round);
+        submitAction(aiMove);
+        setIsAIThinking(false);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [phase, currentPlayerIdx, players]);
 
   const submitAction = (action: Action) => {
     const submission: TurnData = { playerId: players[currentPlayerIdx].id, action };
@@ -320,6 +352,6 @@ export function useGameState() {
     saveEditName: () => {updatePlayerConfig(editingNameIdx!, {name: tempName}); setEditingNameIdx(null)}, 
     cancelEditName: () => setEditingNameIdx(null), tempName, setTempName,
     confirmingUnit, setConfirmingUnit, hasSeenIntro, setHasSeenIntro, tutorial, setTutorial,
-    activeChaosEvent, victoryReason, fogOfWarActive, distanceMatrix, currentCampaignLevel
+    activeChaosEvent, victoryReason, fogOfWarActive, distanceMatrix, currentCampaignLevel, isAIThinking
   };
 }

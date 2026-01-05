@@ -132,15 +132,19 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
                     <h3 className="text-xs sm:text-sm font-black uppercase italic text-white flex items-center gap-2">
                        <Shield size={16} className="text-teal-500" /> DEFENSE (1 AP/Tier)
                     </h3>
-                    <div className="mt-2 space-y-1">
-                      <div className="flex items-center gap-2 text-[8px] font-mono">
-                        <span className={game.localBlockAp >= 1 ? 'text-teal-400 font-bold' : 'text-slate-600'}>T1: 30% / 200 Crack</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[8px] font-mono">
-                        <span className={game.localBlockAp >= 2 ? 'text-teal-400 font-bold' : 'text-slate-600'}>T2: 55% / 400 Crack</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[8px] font-mono">
-                        <span className={game.localBlockAp >= 3 ? 'text-teal-400 font-bold' : 'text-slate-600'}>T3: 75% / 600 Crack {isBlackoutPhase ? '(BLACKOUT ACTIVE)' : '(LOCKED)'}</span>
+                    <div className="mt-3 space-y-2">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2 text-[10px] font-mono">
+                          <span className={game.localBlockAp >= 1 ? 'text-teal-400 font-bold' : 'text-slate-500'}>1 AP: 30% Reduction / 200 Crack Threshold</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] font-mono">
+                          <span className={game.localBlockAp >= 2 ? 'text-teal-400 font-bold' : 'text-slate-500'}>2 AP: 55% Reduction / 400 Crack Threshold</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] font-mono">
+                          <span className={game.localBlockAp >= 3 ? 'text-teal-400 font-bold' : 'text-slate-500 italic'}>
+                            3 AP: 75% Reduction / 600 Crack Threshold {isBlackoutPhase ? '(BLACKOUT_READY)' : '(BLACKOUT_PHASE_ONLY)'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -155,8 +159,8 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
                   </div>
                </div>
                {game.localBlockAp > 0 && (
-                 <div className="mt-2 text-[10px] font-black italic uppercase text-teal-500/80 animate-in fade-in">
-                   {currentDef.desc} ARMED // {currentDef.mitigation} Reduction // {currentDef.threshold} DMG Crack Limit
+                 <div className="mt-2 text-[10px] font-black italic uppercase text-teal-500 animate-in fade-in">
+                   SHIELD_ACTIVE // {currentDef.mitigation} DR // {currentDef.threshold} CRACK_CAP
                  </div>
                )}
             </div>
@@ -176,29 +180,30 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
                {game.localMoveAp > 0 && (
                   <div className="mt-4 space-y-4">
                     <div className="grid grid-cols-2 gap-2 animate-in slide-in-from-top-2">
-                       <button onClick={() => game.setLocalMoveIntent(MoveIntent.CLOSE)} className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${game.localMoveIntent === MoveIntent.CLOSE ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}>
+                       <button onClick={() => { game.setLocalMoveIntent(MoveIntent.CLOSE); playSfx('beep'); }} className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${game.localMoveIntent === MoveIntent.CLOSE ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}>
                           <span className="text-[10px] font-black uppercase">CLOSE DISTANCE</span>
-                          <span className="text-[7px] font-mono">Approach Target</span>
+                          <span className="text-[7px] font-mono">Reduce Range</span>
                        </button>
-                       <button onClick={() => game.setLocalMoveIntent(MoveIntent.OPEN)} className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${game.localMoveIntent === MoveIntent.OPEN ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}>
+                       <button onClick={() => { game.setLocalMoveIntent(MoveIntent.OPEN); playSfx('beep'); }} className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${game.localMoveIntent === MoveIntent.OPEN ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}>
                           <span className="text-[10px] font-black uppercase">OPEN DISTANCE</span>
-                          <span className="text-[7px] font-mono">Retreat from Target</span>
+                          <span className="text-[7px] font-mono">Increase Range</span>
                        </button>
                     </div>
                     <div>
-                      <div className="text-[8px] font-mono text-slate-600 uppercase tracking-widest mb-3 text-center italic">Designate Movement Pivot</div>
+                      <div className="text-[8px] font-mono text-slate-600 uppercase tracking-widest mb-3 text-center italic">Select Pivot Operative</div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {otherPlayers.map((t: any) => {
                           const { name: rangeName } = getRangeToTarget(t.id);
+                          const isTargeted = game.localTargetId === t.id;
                           return (
-                            <button key={t.id} onClick={() => { game.setLocalTargetId(t.id); playSfx('beep'); }} className={`p-4 rounded-xl border text-left flex justify-between items-center transition-all ${game.localTargetId === t.id ? 'bg-amber-500/10 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'bg-slate-800 border-slate-700'}`}>
+                            <button key={t.id} onClick={() => { game.setLocalTargetId(t.id); playSfx('confirm'); }} className={`p-4 rounded-xl border text-left flex justify-between items-center transition-all ${isTargeted ? 'bg-amber-500/10 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'bg-slate-800 border-slate-700'}`}>
                                <div className="flex-1 min-w-0">
-                                  <div className="text-[10px] font-black uppercase text-white truncate">{t.name}</div>
-                                  <div className="text-[7px] font-mono text-slate-500">Range: {rangeName}</div>
+                                  <div className={`text-[10px] font-black uppercase truncate ${isTargeted ? 'text-amber-400' : 'text-white'}`}>{t.name}</div>
+                                  <div className="text-[7px] font-mono text-slate-500 uppercase">Range: {rangeName}</div>
                                </div>
-                               <div className="text-right">
-                                  <div className="text-[10px] font-black text-slate-300">{t.hp} / {t.maxHp} HP</div>
-                                  <div className="text-[7px] font-mono text-slate-600 uppercase">Integrity</div>
+                               <div className="text-right shrink-0">
+                                  <div className="text-[10px] font-black text-slate-400 font-mono tracking-tighter">{t.hp} <span className="text-[7px] text-slate-600">/ {t.maxHp}</span></div>
+                                  <div className="text-[7px] font-mono text-slate-600 uppercase">Health</div>
                                </div>
                             </button>
                           );
@@ -223,26 +228,31 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
                </div>
                {(game.localAttackAp > 0 || (game.localAbilityActive && p.unit?.type !== UnitType.GHOST)) && (
                   <div className="mt-4 space-y-3 animate-in slide-in-from-top-2">
-                     <div className="text-[8px] font-mono text-slate-600 uppercase tracking-widest text-center italic">Designate Attack Target</div>
+                     <div className="text-[8px] font-mono text-slate-600 uppercase tracking-widest text-center italic">Designate Engagement Target</div>
                      <div className="grid grid-cols-1 gap-2">
                         {otherPlayers.map((t: any) => {
                            const { val: rangeVal } = getRangeToTarget(t.id);
                            const mult = getDmgMultiplier(rangeVal);
                            const multPercent = Math.round(mult * 100);
-                           const projectedDmg = Math.floor(BASE_ATTACK_DMG * game.localAttackAp * mult * (p.unit?.type === UnitType.KILLSHOT ? 1.1 : 1.0));
+                           const isKillshot = p.unit?.type === UnitType.KILLSHOT;
+                           const isTargetMarked = p.targetLockId === t.id;
+                           
+                           let combinedMult = mult * (isKillshot ? 1.1 : 1.0) * (isTargetMarked ? 1.3 : 1.0);
+                           const projectedDmg = Math.floor(BASE_ATTACK_DMG * game.localAttackAp * combinedMult);
+                           const isSelected = game.localTargetId === t.id;
 
                            return (
-                             <button key={t.id} onClick={() => { game.setLocalTargetId(t.id); playSfx('confirm'); }} className={`p-4 rounded-xl border text-left flex justify-between items-center transition-all ${game.localTargetId === t.id ? 'bg-red-500/20 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'bg-slate-800 border-slate-700'}`}>
+                             <button key={t.id} onClick={() => { game.setLocalTargetId(t.id); playSfx('confirm'); }} className={`p-4 rounded-xl border text-left flex justify-between items-center transition-all ${isSelected ? 'bg-red-500/20 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'bg-slate-800 border-slate-700'}`}>
                                 <div className="flex-1 min-w-0">
-                                   <div className="text-[10px] font-black uppercase text-white truncate">{t.name}</div>
+                                   <div className={`text-[11px] font-black uppercase truncate ${isSelected ? 'text-red-400' : 'text-white'}`}>{t.name}</div>
                                    <div className="flex items-center gap-2 mt-1">
-                                      <span className={`text-[8px] font-mono ${mult >= 1 ? 'text-teal-400' : 'text-red-400'}`}>Efficiency: {multPercent}%</span>
-                                      {game.localAttackAp > 0 && <span className="text-[8px] font-mono text-white/40">Yield: ~{projectedDmg} HP</span>}
+                                      <span className={`text-[8px] font-mono font-bold ${mult >= 1 ? 'text-teal-400' : 'text-red-400'}`}>Range Efficiency: {multPercent}%</span>
+                                      {game.localAttackAp > 0 && <span className="text-[8px] font-mono text-white/60">Estimated Yield: ~{projectedDmg} DMG</span>}
                                    </div>
                                 </div>
                                 <div className="text-right shrink-0">
-                                   <div className="text-[12px] font-black text-red-500 font-mono tracking-tighter">{t.hp} <span className="text-[8px] text-slate-600">/ {t.maxHp}</span></div>
-                                   <div className="text-[7px] font-mono text-slate-600 uppercase">Current Integrity</div>
+                                   <div className="text-[14px] font-black text-red-500 font-mono tracking-tighter">{t.hp} <span className="text-[9px] text-slate-600">/ {t.maxHp}</span></div>
+                                   <div className="text-[7px] font-mono text-slate-600 uppercase font-bold tracking-widest">Integrity</div>
                                 </div>
                              </button>
                            );
@@ -270,7 +280,7 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
                  (game.localAbilityActive && (p.unit?.type === UnitType.PYRUS || p.unit?.type === UnitType.KILLSHOT || p.unit?.type === UnitType.HUNTER || p.unit?.type === UnitType.PYTHON) && !game.localTargetId)
                }
             >
-               {totalSpent === 0 ? `RESERVE` : `LOCK_PROTOCOL`}
+               {totalSpent === 0 ? `RESERVE_RESOURCES` : `EXECUTE_COMMANDS`}
             </Button>
          </div>
       </div>
