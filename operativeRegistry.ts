@@ -3,7 +3,7 @@ import { UnitType, Unit } from './types';
 
 export const UNIT_PRICES: Record<UnitType, { tier: number, cost: number }> = {
   [UnitType.GHOST]: { tier: 1, cost: 0 },
-  [UnitType.AEGIS]: { tier: 1, cost: 100 }, // Updated cost
+  [UnitType.AEGIS]: { tier: 1, cost: 100 },
   [UnitType.REAPER]: { tier: 1, cost: 500 },
   [UnitType.PYRUS]: { tier: 1, cost: 450 },
   [UnitType.TROJAN]: { tier: 2, cost: 600 },
@@ -36,6 +36,7 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Phase Shift: CD 4. Untargetable this round. Cannot Attack.',
     cooldownMax: 4,
     truth: 'You cannot kill what isn\'t there.',
+    image: 'assets/Ghost.webp'
   },
   [UnitType.AEGIS]: {
     type: UnitType.AEGIS,
@@ -52,6 +53,7 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Titan Shield: Once per game. 80% Damage Reduction for 1 round.',
     cooldownMax: -1,
     truth: 'Steel is stronger than ego.',
+    image: 'assets/Aegis.webp'
   },
   [UnitType.REAPER]: {
     type: UnitType.REAPER,
@@ -68,6 +70,7 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Final Harvest: Once per game. Execute if target < 250 HP.',
     cooldownMax: -1,
     truth: 'The harvest comes for all.',
+    image: 'assets/Reaper.webp'
   },
   [UnitType.PYRUS]: {
     type: UnitType.PYRUS,
@@ -84,6 +87,7 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Firewall: CD 3. 100 DMG + 50% chance to Drain 1 AP.',
     cooldownMax: 3,
     truth: 'Logic is flammable.',
+    image: 'assets/Pyrus.webp'
   },
   [UnitType.TROJAN]: {
     type: UnitType.TROJAN,
@@ -100,6 +104,7 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Overclock: Once per game. 3 points of Shield Pierce.',
     cooldownMax: -1,
     truth: 'Every wall has a back door.',
+    image: 'assets/Trojan.webp'
   },
   [UnitType.KILLSHOT]: {
     type: UnitType.KILLSHOT,
@@ -116,6 +121,7 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Double Tap: CD 5. 2 Free Basic Attacks (0 AP).',
     cooldownMax: 5,
     truth: 'One shot. One simulation.',
+    image: 'assets/Killshot.webp'
   },
   [UnitType.HUNTER]: {
     type: UnitType.HUNTER,
@@ -132,6 +138,7 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Target Lock: Permanent +30% damage to marked target.',
     cooldownMax: -1,
     truth: 'Running only makes the trail easier to follow.',
+    image: 'assets/Hunter.webp'
   },
   [UnitType.PYTHON]: {
     type: UnitType.PYTHON,
@@ -148,6 +155,7 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Neural Paralysis: Once per game. Target cannot Reserve AP.',
     cooldownMax: -1,
     truth: 'The tightest grip is the one you don\'t feel.',
+    image: 'assets/Python.webp'
   },
   [UnitType.MEDIC]: {
     type: UnitType.MEDIC,
@@ -164,6 +172,7 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Emergency Patch: Once per game. Heal 400 HP.',
     cooldownMax: -1,
     truth: 'I fix the code; you fix the target.',
+    image: 'assets/Medic.webp'
   },
   [UnitType.LEECH]: {
     type: UnitType.LEECH,
@@ -180,6 +189,7 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Siphon Soul: Once per game. 100% Lifesteal this round.',
     cooldownMax: -1,
     truth: 'Your strength is my fuel.',
+    image: 'assets/Leech.webp'
   },
   [UnitType.BATTERY]: {
     type: UnitType.BATTERY,
@@ -196,6 +206,7 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Overcharge: Once per game. +4 AP, -100 HP.',
     cooldownMax: -1,
     truth: 'Burning twice as bright for half as long.',
+    image: 'assets/Battery.webp'
   },
   [UnitType.STATIC]: {
     type: UnitType.STATIC,
@@ -212,6 +223,7 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Blackout Pulse: CD 5. Reduce enemy Base AP to 2.',
     cooldownMax: 5,
     truth: 'Silence is the best strategy.',
+    image: 'assets/Static.webp'
   },
   [UnitType.GLITCH]: {
     type: UnitType.GLITCH,
@@ -228,6 +240,7 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Jitter: CD 4. Disrupt target next turn logic.',
     cooldownMax: 4,
     truth: 'The ghost in the machine is real.',
+    image: 'assets/Glitch.webp'
   },
   [UnitType.WARDEN]: {
     type: UnitType.WARDEN,
@@ -244,6 +257,7 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Gridlock: Once per game. Lock target in current range.',
     cooldownMax: -1,
     truth: 'Nobody leaves until I say so.',
+    image: 'assets/Warden.webp'
   },
   [UnitType.SINGULARITY]: {
     type: UnitType.SINGULARITY,
@@ -260,6 +274,7 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Collapse: Once per game. Unavoidable True Damage burst.',
     cooldownMax: -1,
     truth: 'The end is not a choice.',
+    image: 'assets/Singularity.webp'
   },
   [UnitType.RAVEN]: {
     type: UnitType.RAVEN,
@@ -276,5 +291,6 @@ export const UNITS: Record<UnitType, Unit> = {
     activeDesc: 'Precog: Once per game. View and change opponent actions.',
     cooldownMax: -1,
     truth: 'Knowledge is the only real weapon.',
+    image: 'assets/Raven.webp'
   }
 };

@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { ScreenWrapper } from '../layout/ScreenWrapper';
 import { GlobalHeader } from '../layout/GlobalHeader';
@@ -18,8 +19,11 @@ interface OperativesListViewProps {
 export const OperativesListView: React.FC<OperativesListViewProps> = ({ 
   game, onHelp, onSettings
 }) => {
-  const { unlockedUnits, cipheredUnits, credits, purchaseUnit, visualLevel, masteryLevels, getMastery } = game;
+  const { unlockedUnits, cipheredUnits, credits, purchaseUnit, visualLevel, getMastery } = game;
   const [selectedUnit, setSelectedUnit] = useState<UnitType | null>(null);
+
+  /* Resolved missing data variable from selected unit state */
+  const selectedUnitData = selectedUnit ? UNITS[selectedUnit] : null;
 
   const renderTier = (tier: number) => {
     const unitsInTier = Object.values(UNITS).filter(u => UNIT_PRICES[u.type].tier === tier);
@@ -62,6 +66,13 @@ export const OperativesListView: React.FC<OperativesListViewProps> = ({
                     </div>
                   )}
                 </div>
+
+                {/* Thumbnail Preview */}
+                {isUnlocked && u.image && (
+                   <div className="absolute top-0 right-0 w-32 h-32 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none -mr-8 -mt-4 grayscale group-hover:grayscale-0">
+                      <img src={u.image} alt={u.name} className="w-full h-full object-contain rotate-12" />
+                   </div>
+                )}
                 
                 <p className={`text-xs italic mb-8 leading-relaxed relative z-10 ${isUnlocked ? 'text-slate-400' : isCiphered ? 'text-slate-500' : 'text-slate-700'}`}>
                   {isUnlocked ? `"${u.description}"` : isCiphered ? "NEURAL_CIPHER_FOUND: Encryption broken. Establish link via merit injection." : "ENCRYPTED_DATA_LINK: Mission defeat of this Cipher required for decryption."}
@@ -120,29 +131,24 @@ export const OperativesListView: React.FC<OperativesListViewProps> = ({
     );
   };
 
-  const selectedUnitData = selectedUnit ? UNITS[selectedUnit] : null;
-
+  /* Fixed: Added missing main return statement for the component */
   return (
     <ScreenWrapper visualLevel={visualLevel} centerContent={false}>
-      <GlobalHeader phase={Phase.MENU} onHelp={onHelp} onSettings={onSettings} onExit={() => {}} credits={credits} />
-      <div className="flex-1 p-6 flex flex-col items-center max-w-5xl mx-auto w-full pt-10 pb-32">
-        <div className="w-full space-y-16">
-          <div className="text-center space-y-4">
-             <h2 className="text-5xl font-black italic uppercase text-white tracking-tighter glitch-text">OPERATIVES</h2>
-             <p className="text-slate-500 font-mono text-[10px] uppercase tracking-[0.4em]">Establish Link to combat protocol manifests</p>
-          </div>
-
-          <div className="space-y-16">
-            {[1, 2, 3].map(t => renderTier(t))}
-          </div>
+      <GlobalHeader phase={Phase.SETUP_PLAYERS} onHelp={onHelp} onSettings={onSettings} onExit={() => {}} credits={credits} />
+      
+      <div className="flex-1 p-6 space-y-12 max-w-5xl mx-auto w-full pt-10 pb-32 overflow-y-auto custom-scrollbar">
+        <div className="text-center space-y-4">
+           <h2 className="text-5xl font-black italic uppercase text-white tracking-tighter">OPERATIVES_TERMINAL</h2>
+           <p className="text-slate-500 font-mono text-[10px] uppercase tracking-[0.4em]">Review unlocked tactical protocols and system rosters</p>
         </div>
+        {[1, 2, 3].map(tier => renderTier(tier))}
       </div>
 
       {/* Detail Modal */}
       <Modal 
         isOpen={!!selectedUnit} 
         onClose={() => setSelectedUnit(null)} 
-        title={`${selectedUnitData?.name}_PROTOCOL_DATA`}
+        title={`${selectedUnitData?.name || 'UNIT'}_PROTOCOL_DATA`}
         maxWidth="max-w-3xl"
       >
         {selectedUnitData && (
@@ -150,16 +156,28 @@ export const OperativesListView: React.FC<OperativesListViewProps> = ({
             {/* Visual Header */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
               <div className="aspect-square bg-slate-950 border border-slate-800 rounded-[3rem] overflow-hidden relative group">
-                {/* Image Placeholder */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-800 uppercase font-black text-center p-10 select-none">
-                  <div className="text-4xl italic mb-2 tracking-tighter group-hover:scale-110 transition-transform">NO_UPLINK</div>
-                  <div className="text-[10px] font-mono tracking-widest opacity-50">Visual Data Corrupted or Missing</div>
-                  <div className="mt-4 flex gap-2">
-                    <div className="w-2 h-2 rounded-full bg-slate-800 animate-pulse"></div>
-                    <div className="w-2 h-2 rounded-full bg-slate-800 animate-pulse delay-75"></div>
-                    <div className="w-2 h-2 rounded-full bg-slate-800 animate-pulse delay-150"></div>
+                {/* Image Display */}
+                {selectedUnitData.image ? (
+                   <div className="absolute inset-0 p-4">
+                      <img 
+                         src={selectedUnitData.image} 
+                         alt={selectedUnitData.name} 
+                         className="w-full h-full object-contain filter group-hover:brightness-110 transition-all duration-700"
+                      />
+                      {/* Scanline Overlay on Image */}
+                      <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-teal-500/5 to-transparent opacity-20 animate-scanline"></div>
+                   </div>
+                ) : (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-800 uppercase font-black text-center p-10 select-none">
+                    <div className="text-4xl italic mb-2 tracking-tighter group-hover:scale-110 transition-transform">NO_UPLINK</div>
+                    <div className="text-[10px] font-mono tracking-widest opacity-50">Visual Data Corrupted or Missing</div>
+                    <div className="mt-4 flex gap-2">
+                      <div className="w-2 h-2 rounded-full bg-slate-800 animate-pulse"></div>
+                      <div className="w-2 h-2 rounded-full bg-slate-800 animate-pulse delay-75"></div>
+                      <div className="w-2 h-2 rounded-full bg-slate-800 animate-pulse delay-150"></div>
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent opacity-60"></div>
                 <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end">
                   <div className="bg-teal-500/10 border border-teal-500/30 p-3 rounded-2xl backdrop-blur-md">

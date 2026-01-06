@@ -99,7 +99,8 @@ export function useGameState() {
 
   const [unlockedUnits, setUnlockedUnits] = useState<UnitType[]>(() => {
     const saved = localStorage.getItem('protocol_unlocks');
-    return saved ? JSON.parse(saved) : [UnitType.GHOST, UnitType.AEGIS, UnitType.REAPER];
+    // LOCK REAPER AT START: Removed from default list
+    return saved ? JSON.parse(saved) : [UnitType.GHOST, UnitType.AEGIS];
   });
   const [highestLevelReached, setHighestLevelReached] = useState<number>(() => {
     const saved = localStorage.getItem('protocol_progression');

@@ -1,4 +1,5 @@
 
+
 export enum GameMode {
   TACTICAL = 'TACTICAL',
   CHAOS = 'CHAOS'
@@ -21,6 +22,19 @@ export enum Tab {
   OPERATIVES = 'OPERATIVES',
   TERMINAL = 'TERMINAL',
   ARCHIVE = 'ARCHIVE'
+}
+
+/* Added missing RangeZone enum for tactical distance tracking */
+export enum RangeZone {
+  CLOSE = 'CLOSE',
+  MID = 'MID',
+  FAR = 'FAR'
+}
+
+/* Added missing MoveIntent enum for directional movement */
+export enum MoveIntent {
+  CLOSE = 'CLOSE',
+  OPEN = 'OPEN'
 }
 
 export enum Phase {
@@ -138,6 +152,7 @@ export interface Unit {
   activeDesc: string;
   cooldownMax: number; 
   truth: string;
+  image?: string;
 }
 
 export interface AIConfig {
@@ -176,23 +191,13 @@ export enum ActionType {
   BOUNTY = 'BOUNTY'
 }
 
-export enum RangeZone {
-  CLOSE = 'CLOSE',
-  MID = 'MID',
-  FAR = 'FAR'
-}
-
-export enum MoveIntent {
-  CLOSE = 'CLOSE',
-  OPEN = 'OPEN'
-}
-
 export interface Action {
   blockAp: number;
   attackAp: number;
   moveAp: number;
   abilityActive: boolean;
   targetId?: string;
+  /* Updated to use MoveIntent enum instead of inline literal */
   moveIntent?: MoveIntent;
 }
 
