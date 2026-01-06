@@ -13,12 +13,13 @@ interface MenuViewProps {
   onSettings: () => void;
   onBack: () => void;
   credits: number;
+  xp?: number;
 }
 
-export const MenuView: React.FC<MenuViewProps> = ({ onStartGame, visualLevel, onHelp, onSettings, onBack, credits }) => {
+export const MenuView: React.FC<MenuViewProps> = ({ onStartGame, visualLevel, onHelp, onSettings, onBack, credits, xp = 0 }) => {
   return (
     <ScreenWrapper visualLevel={visualLevel} centerContent={false}>
-      <GlobalHeader phase={Phase.MENU} onHelp={onHelp} onSettings={onSettings} onExit={() => {}} credits={credits} />
+      <GlobalHeader phase={Phase.MENU} onHelp={onHelp} onSettings={onSettings} onExit={() => {}} credits={credits} xp={xp} />
       <div className="flex-1 w-full flex flex-col items-center justify-center p-6 pt-12 pb-24 space-y-16 text-center animate-in fade-in slide-in-from-bottom-4 duration-700">
          <div className="space-y-4">
             <div className="h-1 w-24 bg-teal-500 mx-auto rounded-full mb-2"></div>

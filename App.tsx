@@ -1,9 +1,10 @@
 
 import React, { useState } from 'react';
 import { Phase, VisualLevel, Tab } from './types';
-import { useGameState } from './useGameState';
+import { useGameState } from './hooks/useGameState';
 import { SplashView } from './components/views/SplashView';
 import { GameTypeSelectionView } from './components/views/GameTypeSelectionView';
+import { ChapterSelectionView } from './components/views/ChapterSelectionView';
 import { NodeSelectorView } from './components/views/NodeSelectorView';
 import { ArchiveView } from './components/views/ArchiveView';
 import { BlackMarketView } from './components/views/BlackMarketView';
@@ -26,7 +27,6 @@ const App: React.FC = () => {
   const game = useGameState();
   const { playSfx, currentTab, setCurrentTab } = game;
   
-  // Local states for settings modal to prevent global re-renders stealing focus
   const [promoCode, setPromoCode] = useState("");
   const [promoMessage, setPromoMessage] = useState<string | null>(null);
   const [activeDocument, setActiveDocument] = useState<{title: string, content: string} | null>(null);
@@ -101,23 +101,25 @@ const App: React.FC = () => {
       return <OperativesListView game={game} onHelp={() => game.setIsHelpOpen(true)} onSettings={() => game.setIsSettingsOpen(true)} />;
     }
 
-    // TERMINAL TAB
     switch (game.phase) {
       case Phase.GAME_TYPE_SELECTION:
         return (
           <GameTypeSelectionView 
             visualLevel={game.visualLevel} 
-            onCampaign={() => game.setPhase(Phase.CAMPAIGN_MAP)}
+            onCampaign={() => game.setPhase(Phase.CHAPTER_SELECTION)}
             onCustom={() => game.setPhase(Phase.MENU)}
             onHelp={() => game.setIsHelpOpen(true)}
             onSettings={() => game.setIsSettingsOpen(true)}
             credits={game.credits}
+            xp={game.xp}
           />
         );
+      case Phase.CHAPTER_SELECTION:
+        return <ChapterSelectionView game={game} onSelectChapter={() => game.setPhase(Phase.CAMPAIGN_MAP)} onBack={() => game.setPhase(Phase.GAME_TYPE_SELECTION)} />;
       case Phase.CAMPAIGN_MAP:
-        return <NodeSelectorView game={game} onSelectLevel={game.startCampaignLevel} onBack={() => game.setPhase(Phase.GAME_TYPE_SELECTION)} />;
+        return <NodeSelectorView game={game} onSelectLevel={game.startCampaignLevel} onBack={() => game.setPhase(Phase.CHAPTER_SELECTION)} />;
       case Phase.MENU:
-        return <MenuView visualLevel={game.visualLevel} onStartGame={game.startGame} onHelp={() => game.setIsHelpOpen(true)} onSettings={() => game.setIsSettingsOpen(true)} onBack={() => game.setPhase(Phase.GAME_TYPE_SELECTION)} credits={game.credits} />;
+        return <MenuView visualLevel={game.visualLevel} onStartGame={game.startGame} onHelp={() => game.setIsHelpOpen(true)} onSettings={() => game.setIsSettingsOpen(true)} onBack={() => game.setPhase(Phase.GAME_TYPE_SELECTION)} credits={game.credits} xp={game.xp} />;
       case Phase.SETUP_PLAYERS:
         return <SetupPlayersView game={game} />;
       case Phase.BLACKOUT_SELECTION:
@@ -133,11 +135,12 @@ const App: React.FC = () => {
       default:
         return <GameTypeSelectionView 
             visualLevel={game.visualLevel} 
-            onCampaign={() => game.setPhase(Phase.CAMPAIGN_MAP)}
+            onCampaign={() => game.setPhase(Phase.CHAPTER_SELECTION)}
             onCustom={() => game.setPhase(Phase.MENU)}
             onHelp={() => game.setIsHelpOpen(true)}
             onSettings={() => game.setIsSettingsOpen(true)}
             credits={game.credits}
+            xp={game.xp}
           />;
     }
   };
@@ -155,7 +158,6 @@ const App: React.FC = () => {
         phase={game.phase} 
       />
 
-      {/* Help Modal */}
       <Modal 
         isOpen={game.isHelpOpen} 
         onClose={() => game.setIsHelpOpen(false)} 
@@ -221,7 +223,6 @@ const App: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Settings Modal */}
       <Modal 
         isOpen={game.isSettingsOpen} 
         onClose={() => { game.setIsSettingsOpen(false); setActiveDocument(null); }} 
@@ -366,7 +367,6 @@ const App: React.FC = () => {
         )}
       </Modal>
 
-      {/* Exit Confirmation Modal */}
       <Modal 
         isOpen={game.isExitConfirming} 
         onClose={() => game.setIsExitConfirming(false)} 

@@ -1,5 +1,5 @@
 
-import { Player, Action, AIArchetype, AIDifficulty, TurnData, ActionType } from './types';
+import { Player, Action, AIArchetype, AIDifficulty, TurnData, DifficultyLevel } from './types';
 
 const MISTAKE_RATES = {
   [AIDifficulty.EASY]: 0.20,
@@ -11,16 +11,66 @@ export function calculateAIMove(
   aiPlayer: Player, 
   allPlayers: Player[], 
   history: TurnData[][], 
-  round: number
+  round: number,
+  chapter: number = 1,
+  difficulty: DifficultyLevel = DifficultyLevel.NORMAL,
+  playerIntents: TurnData[] = []
 ): Action {
   const config = aiPlayer.aiConfig!;
   const availableAp = aiPlayer.ap;
   const opponents = allPlayers.filter(p => p.id !== aiPlayer.id && !p.isEliminated);
-  
-  if (Math.random() < MISTAKE_RATES[config.difficulty]) {
+  const player = opponents.find(p => !p.isAI);
+
+  // Blackout Modifier: Cheating (Reads your inputs)
+  if (difficulty === DifficultyLevel.BLACKOUT && playerIntents.length > 0 && player) {
+    const playerAction = playerIntents.find(i => i.playerId === player.id)?.action;
+    if (playerAction) {
+      // If player is attacking, prioritize defense
+      if (playerAction.attackAp > 1) {
+        return { blockAp: Math.min(availableAp, 3), attackAp: Math.max(0, availableAp - 3), moveAp: 0, abilityActive: false, targetId: player.id };
+      }
+      // If player is blocking, prioritize reservation or light attacks
+      if (playerAction.blockAp > 1) {
+        return { blockAp: 0, attackAp: 0, moveAp: 0, abilityActive: false };
+      }
+    }
+  }
+
+  // // Fix: Ensure mistake logic only triggers on NORMAL difficulty. 
+  // // Higher difficulties (Overclock, Blackout) use perfect logic (0 mistakes).
+  if (difficulty === DifficultyLevel.NORMAL && Math.random() < MISTAKE_RATES[config.difficulty]) {
     return generateRandomValidMove(availableAp, opponents);
   }
 
+  // Chapter Shifts
+  // Early Chapter (Reactive)
+  if (chapter === 1) {
+    if (availableAp > 4) {
+      return calculateAggroMove(aiPlayer, opponents, availableAp);
+    } else {
+      return { blockAp: Math.min(availableAp, 2), attackAp: 0, moveAp: 0, abilityActive: false };
+    }
+  }
+
+  // Mid Chapter (Proactive)
+  if (chapter === 2) {
+    const cycle = round % 3;
+    if (cycle === 0) { // Turn 3: Burst
+      return calculateAggroMove(aiPlayer, opponents, availableAp);
+    } else { // Turn 1-2: Reserve
+      return { blockAp: 1, attackAp: 0, moveAp: 0, abilityActive: false };
+    }
+  }
+
+  // Late Chapter (Predictive)
+  if (chapter === 3 && player) {
+    if (player.hp < 200) {
+      // Ignore defense, go all-in
+      return { blockAp: 0, attackAp: availableAp, moveAp: 0, abilityActive: true, targetId: player.id };
+    }
+  }
+
+  // Fallback to standard archetypes
   switch (config.archetype) {
     case AIArchetype.TURTLE:
       return calculateTurtleMove(aiPlayer, opponents, availableAp);
@@ -29,7 +79,6 @@ export function calculateAIMove(
     case AIArchetype.STRATEGIST:
       return calculateStrategistMove(aiPlayer, opponents, availableAp, history);
     default:
-      // Fixed: Added abilityActive: false
       return { blockAp: 0, attackAp: 0, moveAp: 0, abilityActive: false };
   }
 }
@@ -39,80 +88,28 @@ function generateRandomValidMove(ap: number, opponents: Player[]): Action {
   const remaining = ap - block;
   const attack = Math.floor(Math.random() * (remaining + 1));
   const target = opponents[Math.floor(Math.random() * opponents.length)]?.id;
-  // Fixed: Added abilityActive: false
   return { blockAp: block, attackAp: attack, moveAp: 0, targetId: attack > 0 ? target : undefined, abilityActive: false };
 }
 
 function calculateTurtleMove(ai: Player, opponents: Player[], ap: number): Action {
   let blockAp = Math.min(ap, 2);
-  if (ai.hp < 15) blockAp = Math.min(ap, 3);
+  if (ai.hp < 300) blockAp = Math.min(ap, 3);
   let attackAp = 0;
   let targetId: string | undefined = undefined;
-  if (ai.hp > 25 && ap - blockAp >= 2) {
+  if (ai.hp > 500 && ap - blockAp >= 2) {
     attackAp = 1;
     targetId = opponents.sort((a, b) => a.hp - b.hp)[0]?.id;
   }
-  // Fixed: Added abilityActive: false
   return { blockAp, attackAp, moveAp: 0, targetId, abilityActive: false };
 }
 
 function calculateAggroMove(ai: Player, opponents: Player[], ap: number): Action {
   const targetId = opponents.sort((a, b) => a.hp - b.hp)[0]?.id;
-  // Fixed: Added abilityActive: false
-  return { blockAp: 0, attackAp: ap, moveAp: 0, targetId, abilityActive: false };
+  return { blockAp: 0, attackAp: Math.floor(ap / 2), moveAp: 0, targetId, abilityActive: false };
 }
 
 function calculateStrategistMove(ai: Player, opponents: Player[], ap: number, history: TurnData[][]): Action {
   if (history.length < 2) return calculateTurtleMove(ai, opponents, ap);
-
-  // Analyze patterns over last 3 rounds (Markov Chain simulation)
-  const windowSize = Math.min(3, history.length);
-  const relevantHistory = history.slice(-windowSize);
-  
-  let totalAttacksReceived = 0;
-  let totalReservesFound = 0;
-  let totalBlocksFound = 0;
-
-  relevantHistory.forEach(round => {
-    round.forEach(submission => {
-      const p = opponents.find(o => o.id === submission.playerId);
-      if (p && !p.isAI) {
-        if (submission.action.attackAp > 1) totalAttacksReceived++;
-        if (submission.action.attackAp === 0 && submission.action.blockAp === 0) totalReservesFound++;
-        if (submission.action.blockAp > 1) totalBlocksFound++;
-      }
-    });
-  });
-
-  let blockAp = 0;
-  let attackAp = 0;
-  let targetId: string | undefined = undefined;
-
-  // Counter pattern: Heavy Aggression -> Block
-  if (totalAttacksReceived >= windowSize) {
-    blockAp = Math.min(ap, 3);
-    attackAp = Math.max(0, ap - blockAp);
-  } 
-  // Counter pattern: Heavy Greed (Reserving) -> Punish with Attack
-  else if (totalReservesFound >= windowSize) {
-    attackAp = Math.min(ap, ap > 5 ? 4 : 3);
-    blockAp = Math.max(0, ap - attackAp);
-  }
-  // Counter pattern: Defensive -> Build AP for bigger hit later
-  else if (totalBlocksFound >= windowSize) {
-    blockAp = 1;
-    attackAp = 0; // Conserve energy
-  }
-  // Default Balanced State
-  else {
-    blockAp = 1;
-    attackAp = Math.min(ap - 1, 1);
-  }
-
-  if (attackAp > 0) {
-    targetId = opponents.sort((a, b) => a.hp - b.hp)[0]?.id;
-  }
-
-  // Fixed: Added abilityActive: false
-  return { blockAp, attackAp, moveAp: 0, targetId, abilityActive: false };
+  const targetId = opponents.sort((a, b) => a.hp - b.hp)[0]?.id;
+  return { blockAp: 1, attackAp: Math.max(0, ap - 1), moveAp: 0, targetId, abilityActive: false };
 }

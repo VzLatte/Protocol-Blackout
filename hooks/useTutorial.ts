@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { TutorialState } from './types';
+import { TutorialState } from '../types';
 
 export function useTutorial(hasCompletedTutorial: boolean) {
   const [tutorial, setTutorial] = useState<TutorialState>({ 

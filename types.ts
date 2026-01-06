@@ -10,6 +10,12 @@ export enum VisualLevel {
   HIGH = 'HIGH'
 }
 
+export enum DifficultyLevel {
+  NORMAL = 'NORMAL',
+  OVERCLOCK = 'OVERCLOCK',
+  BLACKOUT = 'BLACKOUT'
+}
+
 export enum Tab {
   MARKET = 'MARKET',
   OPERATIVES = 'OPERATIVES',
@@ -20,6 +26,7 @@ export enum Tab {
 export enum Phase {
   SPLASH = 'SPLASH',
   GAME_TYPE_SELECTION = 'GAME_TYPE_SELECTION',
+  CHAPTER_SELECTION = 'CHAPTER_SELECTION',
   CAMPAIGN_MAP = 'CAMPAIGN_MAP',
   STORE = 'STORE',
   MENU = 'MENU',
@@ -44,7 +51,10 @@ export enum UnitType {
   MEDIC = 'MEDIC',
   LEECH = 'LEECH',
   BATTERY = 'BATTERY',
-  STATIC = 'STATIC'
+  STATIC = 'STATIC',
+  GLITCH = 'GLITCH',
+  WARDEN = 'WARDEN',
+  SINGULARITY = 'SINGULARITY'
 }
 
 export enum AIArchetype {
@@ -59,6 +69,55 @@ export enum AIDifficulty {
   HARD = 'HARD'
 }
 
+export enum HazardType {
+  NONE = 'NONE',
+  DATA_STORM = 'DATA_STORM', // Periodic damage at Far range
+  VIRAL_INVERSION = 'VIRAL_INVERSION', // Healing hurts
+  LAVA_FLOOR = 'LAVA_FLOOR', // Movement deals damage
+  FOG_OF_WAR = 'FOG_OF_WAR', // Hidden enemy intent/range
+  AP_FLUX = 'AP_FLUX', // Random AP generation
+  NULL_FIELD = 'NULL_FIELD', // No Abilities allowed
+  GRAVITY_WELL = 'GRAVITY_WELL', // Movement costs double
+  OVERLOAD = 'OVERLOAD', // High damage deals recoil
+}
+
+export enum WinCondition {
+  ELIMINATION = 'ELIMINATION', // Kill enemy
+  SURVIVAL = 'SURVIVAL', // Survive X rounds
+  UPLOAD = 'UPLOAD', // End turn at Range 0 for X turns
+  RESOURCE_HOLD = 'RESOURCE_HOLD', // End with X AP
+}
+
+export interface CampaignLevel {
+  id: string;
+  chapter: number;
+  sequence: number; // 1-12
+  title: string;
+  description: string;
+  
+  // Enemy Configuration
+  enemyUnit: UnitType;
+  enemyName?: string; 
+  enemyAi: AIArchetype;
+  enemyCount: number; 
+  enemyHpMult: number; 
+  
+  // Tactical Modifiers
+  hazard: HazardType;
+  winCondition: WinCondition;
+  winValue: number; 
+  
+  // Rewards
+  creditReward: number;
+  xpReward: number;
+  unlockUnit?: UnitType; 
+  
+  // Narrative
+  introText: string;
+  winText: string;
+  lossText: string;
+}
+
 export interface StatusEffect {
   type: 'BURN' | 'POISON' | 'PARALYZE';
   duration: number;
@@ -69,15 +128,15 @@ export interface Unit {
   name: string;
   role: string;
   description: string;
-  // Summary of the unit's main tactical advantage
   special: string;
   hp: number;
   maxHp: number;
   speed: number;
   focus: number;
+  dmgMultiplier: number;
   passiveDesc: string;
   activeDesc: string;
-  cooldownMax: number; // -1 for once per game
+  cooldownMax: number; 
   truth: string;
 }
 
@@ -102,8 +161,9 @@ export interface Player {
   activeUsed: boolean;
   statuses: StatusEffect[];
   isAbilityActive: boolean;
-  targetLockId?: string; // For Hunter's mark
-  overclockTurns?: number; // For Trojan
+  targetLockId?: string;
+  overclockTurns?: number;
+  isBoss?: boolean;
 }
 
 export enum ActionType {
@@ -157,7 +217,7 @@ export interface ResolutionLog {
   mitigationPercent?: number;
   defenseTier?: number;
   rangeChange?: string;
-  fatigueGain?: number;
+  fatigueGained?: number;
 }
 
 export interface TutorialState {

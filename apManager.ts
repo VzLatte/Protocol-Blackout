@@ -9,7 +9,8 @@ export function getCurrentEscalation(round: number) {
   return ESCALATION_PHASES.find(p => round >= p.rounds[0] && round <= p.rounds[1]) || ESCALATION_PHASES[ESCALATION_PHASES.length - 1];
 }
 
-export function calculateIncome(currentAp: number, round: number): number {
+export function calculateIncome(currentAp: number, round: number, difficultyCapOverride?: number): number {
   const esc = getCurrentEscalation(round);
-  return Math.min(esc.rolloverCap, currentAp) + esc.baseIncome;
+  const cap = difficultyCapOverride !== undefined ? Math.min(esc.rolloverCap, difficultyCapOverride) : esc.rolloverCap;
+  return Math.min(cap, currentAp) + esc.baseIncome;
 }

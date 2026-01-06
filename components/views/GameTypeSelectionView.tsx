@@ -12,14 +12,15 @@ interface GameTypeSelectionViewProps {
   onHelp: () => void;
   onSettings: () => void;
   credits: number;
+  xp?: number;
 }
 
 export const GameTypeSelectionView: React.FC<GameTypeSelectionViewProps> = ({ 
-  onCampaign, onCustom, visualLevel, onHelp, onSettings, credits 
+  onCampaign, onCustom, visualLevel, onHelp, onSettings, credits, xp = 0
 }) => {
   return (
     <ScreenWrapper visualLevel={visualLevel} centerContent={false}>
-      <GlobalHeader phase={Phase.GAME_TYPE_SELECTION} onHelp={onHelp} onSettings={onSettings} onExit={() => {}} credits={credits} />
+      <GlobalHeader phase={Phase.GAME_TYPE_SELECTION} onHelp={onHelp} onSettings={onSettings} onExit={() => {}} credits={credits} xp={xp} />
       <div className="flex-1 w-full flex flex-col items-center justify-center p-6 pt-12 pb-24 space-y-12 text-center animate-in fade-in slide-in-from-bottom-4 duration-700">
          <div className="space-y-4">
             <h1 className="text-6xl sm:text-7xl font-black text-white italic uppercase tracking-tighter">PROTOCOL</h1>
