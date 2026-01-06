@@ -95,8 +95,8 @@ export default defineConfig(({ mode }) => {
           output: {
             manualChunks: {
               vendor: ['react', 'react-dom'],
-              engine: ['./src/combatEngine.ts', './src/aiLogic.ts'],
-              data: ['./src/campaignRegistry.ts', './src/operativeRegistry.ts']
+              engine: ['./combatEngine.ts', './aiLogic.ts'],
+              data: ['./campaignRegistry.ts', './operativeRegistry.ts']
             }
           }
         }
