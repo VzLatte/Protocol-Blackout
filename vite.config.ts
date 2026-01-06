@@ -55,6 +55,7 @@ export default defineConfig(({ mode }) => {
           workbox: {
             // Caches all build artifacts (JS, CSS, HTML)
             globPatterns: ['**/*.{js,css,html,ico,png,svg,mp3,json,webp}'],
+            maximumFileSizeToCacheInBytes: 5242880,
             cleanupOutdatedCaches: true,
             clientsClaim: true,
             skipWaiting: true,
