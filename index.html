@@ -1,192 +1,89 @@
-
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full bg-slate-950">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PROTOCOL - BLACKOUT</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #020617;
-            color: #f8fafc;
-            overflow-x: hidden;
-            height: 100%;
-        }
-        .font-mono {
-            font-family: 'JetBrains+Mono', monospace;
-        }
-        .scanline {
-            width: 100%;
-            height: 4px;
-            z-index: 99;
-            background: linear-gradient(to bottom, transparent, rgba(20, 184, 166, 0.2), transparent);
-            opacity: 0.5;
-            position: absolute;
-            bottom: 100%;
-            pointer-events: none;
-            animation: scanline 6s linear infinite;
-        }
-        @keyframes scanline {
-            0% { top: -5%; }
-            100% { top: 105%; }
-        }
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PROTOCOL: BLACKOUT</title>
+    
+    <meta name="theme-color" content="#020617">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
-        /* High detail specific header flicker */
-        .scanline-header {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background: rgba(20, 184, 166, 0.8);
-            box-shadow: 0 0 15px rgba(20, 184, 166, 0.5);
-            z-index: 100;
-            animation: flicker-header 0.2s infinite alternate;
-            pointer-events: none;
+    <style>
+        :root { --neon-teal: rgba(20, 184, 166, 0.8); }
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #020617; color: #f8fafc;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
         }
-        @keyframes flicker-header {
-            0% { opacity: 0.2; }
-            100% { opacity: 0.6; }
+        .boot-shell {
+            position: fixed; inset: 0; z-index: 50;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            background: #020617;
         }
-        
         .tactical-grid {
-            position: absolute;
-            inset: 0;
+            position: absolute; inset: 0;
             background-image: 
-                linear-gradient(rgba(20, 184, 166, 0.25) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(20, 184, 166, 0.25) 1px, transparent 1px);
+                linear-gradient(rgba(20, 184, 166, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(20, 184, 166, 0.05) 1px, transparent 1px);
             background-size: 40px 40px;
-            pointer-events: none;
             z-index: 0;
         }
-        
-        .tactical-grid::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: radial-gradient(circle at 50% 50%, transparent 20%, rgba(2, 6, 23, 0.8) 100%);
+        .terminal-loader {
+            position: relative; z-index: 60;
+            font-family: monospace;
+            text-transform: uppercase; letter-spacing: 0.15em;
+            font-size: 14px;
         }
-
-        .ambient-spots {
-            position: absolute;
-            inset: 0;
-            overflow: hidden;
-            pointer-events: none;
+        .cursor {
+            display: inline-block; width: 8px; height: 1em;
+            background: var(--neon-teal); margin-left: 5px;
+            animation: blink 1s infinite steps(2);
         }
-        .ambient-spot {
-            position: absolute;
-            width: 600px;
-            height: 600px;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(20, 184, 166, 0.15) 0%, transparent 70%);
-            animation: float-ambient 25s infinite ease-in-out;
-            filter: blur(60px);
+        @keyframes blink { 0% { opacity: 0; } 100% { opacity: 1; } }
+        .load-bar-container {
+            width: 180px; height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+            margin-top: 20px; overflow: hidden; position: relative;
         }
-        @keyframes float-ambient {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            33% { transform: translate(150px, 100px) scale(1.4); }
-            66% { transform: translate(-100px, 200px) scale(0.6); }
+        .load-bar-fill {
+            position: absolute; width: 30%; height: 100%;
+            background: var(--neon-teal);
+            animation: slide 2s infinite ease-in-out;
         }
-
-        .noise-layer {
-            position: absolute;
-            inset: 0;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-            pointer-events: none;
-            z-index: 1;
-            mix-blend-mode: soft-light;
-        }
-
-        .glitch-text:hover {
-            text-shadow: 2px 0 #ef4444, -2px 0 #06b6d4;
-        }
-
-        .animate-glitch {
-            position: relative;
-            display: inline-block;
-            animation: glitch 3s cubic-bezier(.25,.46,.45,.94) infinite;
-        }
-
-        @keyframes glitch {
-            0%, 85%, 100% { 
-                transform: none; 
-                text-shadow: none; 
-                clip-path: inset(0 0 0 0);
-                filter: none;
-            }
-            86% { 
-                transform: skewX(-10deg); 
-                text-shadow: -2px 0 #ef4444, 2px 0 #06b6d4;
-                clip-path: inset(10% 0 85% 0);
-            }
-            87% { 
-                transform: skewX(10deg); 
-                text-shadow: 2px 0 #ef4444, -2px 0 #06b6d4;
-                clip-path: inset(80% 0 5% 0);
-            }
-            88% { 
-                transform: none; 
-                text-shadow: none;
-                clip-path: inset(0 0 0 0);
-            }
-            92% {
-                transform: scaleY(1.1);
-                filter: hue-rotate(90deg) brightness(1.5);
-                clip-path: inset(40% 0 40% 0);
-            }
-            93% {
-                transform: none;
-                filter: none;
-                clip-path: inset(0 0 0 0);
-            }
-            94% {
-                transform: translateX(-5px);
-                text-shadow: 5px 0 #ef4444, -5px 0 #06b6d4;
-            }
-            95% {
-                transform: translateX(5px);
-                text-shadow: -5px 0 #ef4444, 5px 0 #06b6d4;
-            }
-            96% {
-                transform: none;
-                text-shadow: none;
-            }
-        }
-
-        .red-alert-pulse {
-            animation: red-alert 1.5s ease-in-out infinite;
-        }
-        @keyframes red-alert {
-            0%, 100% { background-color: #020617; }
-            50% { background-color: rgba(239, 68, 68, 0.1); }
-        }
-        
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #1e293b;
-            border-radius: 10px;
-        }
+        @keyframes slide { 0% { left: -30%; } 100% { left: 130%; } }
     </style>
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
-  }
-}
-</script>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <div class="boot-shell">
+            <div class="tactical-grid"></div>
+            <div class="terminal-loader">
+                <span style="color: var(--neon-teal)">> </span>
+                <span id="boot-status">SYSTEM_CHECK</span>
+                <span class="cursor"></span>
+            </div>
+            <div class="load-bar-container">
+                <div class="load-bar-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/index.tsx"></script>
+
+    <script>
+        const statuses = ["DECRYPTING", "LOADING_CORE", "CACHING_SFX", "READY"];
+        let i = 0;
+        const statusEl = document.getElementById('boot-status');
+        if(statusEl) {
+            setInterval(() => {
+                statusEl.innerText = statuses[i % statuses.length];
+                i++;
+            }, 1000);
+        }
+    </script>
 </body>
 </html>
