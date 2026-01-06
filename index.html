@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-slate-950">
+<html lang="en" class="h-full bg-[#020617]">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -11,32 +11,22 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
     <style>
+        /* Minimal Critical CSS for the Boot Loader */
         :root { --neon-teal: rgba(20, 184, 166, 0.8); }
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
             background-color: #020617; color: #f8fafc;
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-family: ui-monospace, 'JetBrains Mono', monospace;
             overflow: hidden;
         }
         .boot-shell {
             position: fixed; inset: 0; z-index: 50;
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
-            background: #020617;
-        }
-        .tactical-grid {
-            position: absolute; inset: 0;
-            background-image: 
-                linear-gradient(rgba(20, 184, 166, 0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(20, 184, 166, 0.05) 1px, transparent 1px);
-            background-size: 40px 40px;
-            z-index: 0;
         }
         .terminal-loader {
             position: relative; z-index: 60;
-            font-family: monospace;
-            text-transform: uppercase; letter-spacing: 0.15em;
-            font-size: 14px;
+            text-transform: uppercase; letter-spacing: 0.15em; font-size: 12px;
         }
         .cursor {
             display: inline-block; width: 8px; height: 1em;
@@ -44,14 +34,12 @@
             animation: blink 1s infinite steps(2);
         }
         @keyframes blink { 0% { opacity: 0; } 100% { opacity: 1; } }
-        .load-bar-container {
-            width: 180px; height: 1px;
-            background: rgba(255, 255, 255, 0.1);
-            margin-top: 20px; overflow: hidden; position: relative;
+        .load-bar {
+            width: 150px; height: 1px; background: rgba(255, 255, 255, 0.1);
+            margin-top: 15px; position: relative; overflow: hidden;
         }
-        .load-bar-fill {
-            position: absolute; width: 30%; height: 100%;
-            background: var(--neon-teal);
+        .load-fill {
+            position: absolute; width: 30%; height: 100%; background: var(--neon-teal);
             animation: slide 2s infinite ease-in-out;
         }
         @keyframes slide { 0% { left: -30%; } 100% { left: 130%; } }
@@ -60,30 +48,22 @@
 <body>
     <div id="root">
         <div class="boot-shell">
-            <div class="tactical-grid"></div>
             <div class="terminal-loader">
                 <span style="color: var(--neon-teal)">> </span>
-                <span id="boot-status">SYSTEM_CHECK</span>
+                <span id="boot-status">INITIALIZING_CORE</span>
                 <span class="cursor"></span>
             </div>
-            <div class="load-bar-container">
-                <div class="load-bar-fill"></div>
-            </div>
+            <div class="load-bar"><div class="load-fill"></div></div>
         </div>
     </div>
 
     <script type="module" src="/index.tsx"></script>
 
     <script>
-        const statuses = ["DECRYPTING", "LOADING_CORE", "CACHING_SFX", "READY"];
+        const states = ["MAPPING_SECTORS", "CACHING_OPERATIVES", "LINK_ESTABLISHED"];
         let i = 0;
-        const statusEl = document.getElementById('boot-status');
-        if(statusEl) {
-            setInterval(() => {
-                statusEl.innerText = statuses[i % statuses.length];
-                i++;
-            }, 1000);
-        }
+        const el = document.getElementById('boot-status');
+        setInterval(() => { if(el) el.innerText = states[i++ % states.length]; }, 1200);
     </script>
 </body>
 </html>

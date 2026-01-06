@@ -1,9 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 body {
     font-family: 'Inter', sans-serif;
     background-color: #020617;
     color: #f8fafc;
-    overflow-x: hidden;
-    height: 100%;
+    overflow: hidden; /* Changed from overflow-x to prevent vertical bounce */
+    height: 100dvh;
 }
 
 .font-mono {
