@@ -1,17 +1,13 @@
 
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { Player, TurnData, ResolutionLog, Phase, Action, DifficultyLevel } from '../types';
+import { useState, useCallback, useEffect } from 'react';
+import { Player, TurnData, ResolutionLog, Phase, GameMode, Action, DifficultyLevel, HazardType, Unit, UnitType } from '../types';
+import { INITIAL_HP } from '../constants';
 import { resolveCombat } from '../combatEngine';
-import { calculateAIMove } from '../aiLogic';
-import { CAMPAIGN_LEVELS } from '../campaignRegistry';
+import { UNITS } from '../operativeRegistry';
 
-export function useBattleEngine(
-  phase: Phase, 
-  setPhase: (p: Phase) => void,
-  campaignDifficulty: DifficultyLevel,
-  currentChapter: number,
-  currentCampaignLevelId: string | null
-) {
+export function useBattleEngine() {
+  const [phase, setPhase] = useState<Phase>(Phase.SPLASH);
+  const [mode, setMode] = useState<GameMode>(GameMode.TACTICAL);
   const [players, setPlayers] = useState<Player[]>([]);
   const [currentPlayerIdx, setCurrentPlayerIdx] = useState(0);
   const [round, setRound] = useState(1);
@@ -20,141 +16,138 @@ export function useBattleEngine(
   const [fullHistory, setFullHistory] = useState<TurnData[][]>([]);
   const [resolutionLogs, setResolutionLogs] = useState<ResolutionLog[]>([]);
   const [distanceMatrix, setDistanceMatrix] = useState<Map<string, number>>(new Map());
-  const [isAIThinking, setIsAIThinking] = useState(false);
   const [victoryReason, setVictoryReason] = useState<string | null>(null);
+  const [activeChaosEvent, setActiveChaosEvent] = useState<{name: string, description: string} | null>(null);
+  const [fogOfWarActive, setFogOfWarActive] = useState(0);
+  const [phaseTransition, setPhaseTransition] = useState<string | null>(null);
 
-  const aiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearBattleState = useCallback(() => {
-    setPlayers([]);
-    setCurrentPlayerIdx(0);
-    setRound(1);
-    setCurrentTurnSubmissions([]);
-    setFullHistory([]);
-    setResolutionLogs([]);
-    setDistanceMatrix(new Map());
-    setVictoryReason(null);
-    setIsAIThinking(false);
-    if (aiTimerRef.current) clearTimeout(aiTimerRef.current);
-  }, []);
-
-  const resolveTurn = useCallback((submissions: TurnData[]) => {
-    const currentLvl = CAMPAIGN_LEVELS.find(l => l.id === currentCampaignLevelId);
-    const hazard = currentLvl?.hazard || 'NONE' as any;
-
-    const finalSubmissions = submissions.map(sub => {
-      const p = players.find(x => x.id === sub.playerId);
-      if (p?.isAI && campaignDifficulty === DifficultyLevel.BLACKOUT) {
-        return { 
-          ...sub, 
-          action: calculateAIMove(p, players, fullHistory, round, currentChapter, campaignDifficulty, submissions) 
-        };
-      }
-      return sub;
-    });
-
-    setFullHistory(prev => [...prev, finalSubmissions]);
-    
-    const result = resolveCombat(
-      players, 
-      finalSubmissions, 
-      round, 
-      maxRounds, 
-      'TACTICAL' as any, 
-      null, 
-      distanceMatrix, 
-      campaignDifficulty, 
-      hazard
-    );
-
-    setPlayers(result.nextPlayers);
-    setResolutionLogs(result.logs);
-    setDistanceMatrix(result.nextDistanceMatrix);
-    setRound(result.nextRound);
-    setPhase(Phase.RESOLUTION);
-
-    // End Game Detection
-    const alivePlayers = result.nextPlayers.filter(p => !p.isEliminated);
-    const humanAlive = result.nextPlayers.some(p => !p.isAI && !p.isEliminated);
-    const aiAlive = result.nextPlayers.some(p => p.isAI && !p.isEliminated);
-
-    if (currentCampaignLevelId) {
-      if (!aiAlive && humanAlive) setVictoryReason("OPERATIONAL_SUCCESS");
-      else if (!humanAlive) setVictoryReason("DATA_CORRUPTION_DETECTED");
-    } else {
-      if (alivePlayers.length <= 1 || result.nextRound > maxRounds) {
-        setVictoryReason(alivePlayers.length === 1 ? "SECTOR_SECURED" : "DRAW");
+  // Auto-advance AI during PASS_PHONE phase
+  useEffect(() => {
+    if (phase === Phase.PASS_PHONE) {
+      const activePlayer = players[currentPlayerIdx];
+      if (activePlayer?.isAI) {
+        const timer = setTimeout(() => {
+          setPhase(Phase.TURN_ENTRY);
+        }, 800); // Small delay to let the "Processing Logic" UI be seen briefly
+        return () => clearTimeout(timer);
       }
     }
-  }, [players, round, maxRounds, distanceMatrix, campaignDifficulty, currentChapter, currentCampaignLevelId, fullHistory, setPhase]);
+  }, [phase, players, currentPlayerIdx]);
 
-  const submitAction = useCallback((action: Action) => {
+  const initDistances = (pList: Player[]) => {
+    const newMatrix = new Map<string, number>();
+    for (let i = 0; i < pList.length; i++) {
+      for (let j = i + 1; j < pList.length; j++) {
+         const key = [pList[i].id, pList[j].id].sort().join('-');
+         newMatrix.set(key, 1);
+      }
+    }
+    setDistanceMatrix(newMatrix);
+  };
+
+  const selectUnit = (type: UnitType) => {
+    const nextPlayers = [...players];
+    const u = UNITS[type];
+    if (!nextPlayers[currentPlayerIdx]) return;
+    
+    nextPlayers[currentPlayerIdx] = {
+      ...nextPlayers[currentPlayerIdx],
+      unit: u,
+      hp: u.hp,
+      maxHp: u.maxHp
+    };
+    
+    setPlayers(nextPlayers);
+    
+    let nextIdx = currentPlayerIdx + 1;
+    while (nextIdx < nextPlayers.length && nextPlayers[nextIdx].isEliminated) nextIdx++;
+    
+    if (nextIdx < nextPlayers.length) {
+      setCurrentPlayerIdx(nextIdx);
+    } else { 
+      setCurrentPlayerIdx(0); 
+      setPhase(Phase.PASS_PHONE); 
+    }
+  };
+
+  const submitTurnAction = (action: Action, onTurnComplete: (subs: TurnData[]) => void) => {
     const submission: TurnData = { playerId: players[currentPlayerIdx].id, action };
     const nextSubmissions = [...currentTurnSubmissions, submission];
     setCurrentTurnSubmissions(nextSubmissions);
-
+    
     let nextIdx = currentPlayerIdx + 1;
     while (nextIdx < players.length && players[nextIdx].isEliminated) nextIdx++;
-
+    
     if (nextIdx < players.length) {
       setCurrentPlayerIdx(nextIdx);
       setPhase(Phase.PASS_PHONE);
     } else {
-      resolveTurn(nextSubmissions);
+      onTurnComplete(nextSubmissions);
     }
-  }, [players, currentPlayerIdx, currentTurnSubmissions, setPhase, resolveTurn]);
+  };
 
-  // AI Thinking Lifecycle
-  useEffect(() => {
-    // Only proceed if it is AI turn in TURN_ENTRY phase
-    if (phase !== Phase.TURN_ENTRY || !players[currentPlayerIdx]?.isAI) {
-      if (isAIThinking) setIsAIThinking(false);
-      return;
-    }
-
-    // If we are already thinking, do not restart the timer. 
-    // This assumes that phase/playerIdx/players dependencies don't change while thinking.
-    // If they do change (e.g. unexpected re-render), this guard prevents loop.
-    if (isAIThinking) return;
-
-    setIsAIThinking(true);
+  const executeResolution = (
+    submissions: TurnData[], 
+    difficulty: DifficultyLevel, 
+    hazard: HazardType,
+    levelId: string | null
+  ) => {
+    const result = resolveCombat(players, submissions, round, maxRounds, mode, activeChaosEvent, distanceMatrix, difficulty, hazard);
     
-    const currentLevel = currentCampaignLevelId ? CAMPAIGN_LEVELS.find(l => l.id === currentCampaignLevelId) : null;
-    const sequence = currentLevel?.sequence || 1;
-    const baseDelay = (currentChapter * 400); // Reduced slightly for better UX
-    const seqDelay = (sequence * 100);
-    const thinkingTime = Math.max(800, baseDelay + seqDelay + Math.random() * 500);
+    setPlayers(result.nextPlayers);
+    setResolutionLogs(result.logs);
+    setDistanceMatrix(result.nextDistanceMatrix);
+    setFullHistory(prev => [...prev, submissions]);
+    setPhase(Phase.RESOLUTION);
+    setRound(result.nextRound);
+    
+    return result.nextPlayers;
+  };
 
-    aiTimerRef.current = setTimeout(() => {
-      // Capture latest state via closure is tricky if state updated, 
-      // but for AI logic which relies on 'players' snapshot at start of turn, it's usually acceptable.
-      // Ideally we would use a ref for players if we expected mid-turn updates.
-      const move = calculateAIMove(players[currentPlayerIdx], players, fullHistory, round, currentChapter, campaignDifficulty);
-      
-      setIsAIThinking(false);
-      submitAction(move);
-    }, thinkingTime);
+  const nextTurn = () => {
+    setCurrentTurnSubmissions([]);
+    setResolutionLogs([]);
+    setCurrentPlayerIdx(0);
+    
+    const alivePlayers = players.filter(p => !p.isEliminated);
+    const isGameOver = alivePlayers.length <= 1 || round > maxRounds || victoryReason !== null;
+    
+    if (isGameOver) setPhase(Phase.GAME_OVER);
+    else setPhase(Phase.PASS_PHONE);
+  };
 
-    return () => {
-      // Cleanup on unmount or dependency change
-      if (aiTimerRef.current) clearTimeout(aiTimerRef.current);
-      // We do NOT set isAIThinking(false) here to avoid the infinite loop trap 
-      // where cleanup triggers a re-render that restarts the effect.
-    };
-  }, [phase, currentPlayerIdx, players, campaignDifficulty, currentChapter, currentCampaignLevelId, round, fullHistory, submitAction]); 
-  // removed isAIThinking from dependency array to break the loop
+  const resetBattle = () => {
+    setPlayers([]);
+    setRound(1);
+    setCurrentTurnSubmissions([]);
+    setResolutionLogs([]);
+    setFullHistory([]);
+    setActiveChaosEvent(null);
+    setFogOfWarActive(0);
+    setDistanceMatrix(new Map());
+    setVictoryReason(null);
+  };
 
   return {
+    phase, setPhase,
+    mode, setMode,
     players, setPlayers,
     currentPlayerIdx, setCurrentPlayerIdx,
     round, setRound,
     maxRounds, setMaxRounds,
-    resolutionLogs,
+    currentTurnSubmissions, setCurrentTurnSubmissions,
+    fullHistory, setFullHistory,
+    resolutionLogs, setResolutionLogs,
     distanceMatrix, setDistanceMatrix,
-    isAIThinking,
-    victoryReason,
-    submitAction,
-    clearBattleState,
-    setCurrentTurnSubmissions
+    victoryReason, setVictoryReason,
+    activeChaosEvent, setActiveChaosEvent,
+    fogOfWarActive, setFogOfWarActive,
+    phaseTransition, setPhaseTransition,
+    initDistances,
+    selectUnit,
+    submitTurnAction,
+    executeResolution,
+    nextTurn,
+    resetBattle
   };
 }

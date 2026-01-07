@@ -2,22 +2,37 @@
 import { ActionType, RangeZone, AIArchetype, AIDifficulty, UnitType } from './types';
 
 export const INITIAL_HP = 1000;
+export const BASE_ATTACK_DMG = 120;
+
+// New Tiered System Configuration
+// AP Costs: Level 1 = 1, Level 2 = 3 (1+2), Level 3 = 6 (1+2+3)
+export const ATTACK_CONFIG = {
+  1: { ap: 1, mult: 1.0, name: 'PROBE' },
+  2: { ap: 3, mult: 2.25, name: 'STRIKE' },
+  3: { ap: 6, mult: 4.5, chip: 0.1, name: 'EXECUTE' } // 10% Chip Damage
+};
+
+export const BLOCK_CONFIG = {
+  1: { ap: 1, base: 150, name: 'COVER' },
+  2: { ap: 3, base: 350, name: 'BARRIER' },
+  3: { ap: 6, base: 650, name: 'FORTRESS' }
+};
+
+// Legacy cost map for simple lookups, though logic is now dynamic
 export const ACTION_COSTS = {
-  [ActionType.ATTACK]: 2,
-  [ActionType.BLOCK]: 1,
-  [ActionType.MOVE]: 1, // Base cost, scales with Fatigue
-  [ActionType.BOUNTY]: 1,
+  [ActionType.ATTACK]: 0, // Dynamic
+  [ActionType.BLOCK]: 0, // Dynamic
+  [ActionType.MOVE]: 1, // Base, increases with fatigue
+  [ActionType.BOUNTY]: 0,
   [ActionType.RESERVE]: 0,
   [ActionType.PHASE]: 3,
 };
 
-export const BASE_ATTACK_DMG = 125;
-
-// Defense Overhaul Configuration
 export const DEFENSE_CONFIG = {
-  1: { mitigation: 0.30, crackedMitigation: 0.10, threshold: 200, name: 'TACTICAL COVER' },
-  2: { mitigation: 0.55, crackedMitigation: 0.25, threshold: 400, name: 'FULL BARRIER' },
-  3: { mitigation: 0.75, crackedMitigation: 0.40, threshold: 600, name: 'OVERLOAD SHIELD' },
+  // Legacy mapping kept for compatibility with UI components if needed
+  1: { mitigation: 0, threshold: 150, name: 'COVER' },
+  2: { mitigation: 0, threshold: 350, name: 'BARRIER' },
+  3: { mitigation: 0, threshold: 650, name: 'FORTRESS' },
 };
 
 export const RANGE_VALUES = {
@@ -35,15 +50,15 @@ export const RANGE_NAMES = {
 export const TIME_LIMITS = [0, 15, 30, 60];
 
 export const CHAOS_DECK = [
-  { name: 'SOLAR FLARE', description: 'All Shield Mitigation is reduced by 20% flat. (A "Blood Round").' },
+  { name: 'SOLAR FLARE', description: 'Overheat penalty is doubled this round (30% per stack).' },
   { name: 'REBATE', description: 'Any AP spent on Block this round is refunded to the player next turn.' },
   { name: 'BOUNTY HUNT', description: 'Every player is automatically "Marked." Whoever deals damage this round gains +1 AP.' },
   { name: 'SYSTEM RESET', description: 'All players\' current AP pools are set to 0. (The "Greed Killer").' },
-  { name: 'OVERCLOCK', description: 'Every 1 AP spent on Attack deals 250 damage instead of 125. (Extreme lethality).' },
+  { name: 'ADRENALINE', description: 'Move Fatigue is reset to 0 for everyone.' },
   { name: 'FOG OF WAR', description: 'You cannot see the HP levels of other players for the next 2 rounds.' },
   { name: 'SUDDEN DEATH', description: 'Everyone loses 150 HP immediately.' },
   { name: 'TRADE DEAL', description: 'The player with the highest HP swaps their AP pool with the player with the lowest HP.' },
-  { name: 'SHIELD WALL', description: 'Shield Thresholds are doubled this round.' },
+  { name: 'SHIELD WALL', description: 'Shield Values are +50% effective this round.' },
   { name: 'MIRAGE', description: 'All "Abilities" are disabled for this round. Pure Jurassic World math only.' }
 ];
 

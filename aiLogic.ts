@@ -7,6 +7,22 @@ const MISTAKE_RATES = {
   [AIDifficulty.HARD]: 0.05,
 };
 
+// Helper: Determine max Tier affordable with given budget
+// Cost: L1=1, L2=3, L3=6
+const getMaxTier = (budget: number) => {
+  if (budget >= 6) return 3;
+  if (budget >= 3) return 2;
+  if (budget >= 1) return 1;
+  return 0;
+};
+
+const getCost = (tier: number) => {
+  if (tier === 3) return 6;
+  if (tier === 2) return 3;
+  if (tier === 1) return 1;
+  return 0;
+};
+
 export function calculateAIMove(
   aiPlayer: Player, 
   allPlayers: Player[], 
@@ -16,7 +32,12 @@ export function calculateAIMove(
   difficulty: DifficultyLevel = DifficultyLevel.NORMAL,
   playerIntents: TurnData[] = []
 ): Action {
-  const config = aiPlayer.aiConfig!;
+  // Safety check: Ensure AI Config exists
+  if (!aiPlayer.aiConfig) {
+    return { blockAp: 0, attackAp: 0, moveAp: 0, abilityActive: false };
+  }
+
+  const config = aiPlayer.aiConfig;
   const availableAp = aiPlayer.ap;
   const opponents = allPlayers.filter(p => p.id !== aiPlayer.id && !p.isEliminated);
   const player = opponents.find(p => !p.isAI);
@@ -25,19 +46,20 @@ export function calculateAIMove(
   if (difficulty === DifficultyLevel.BLACKOUT && playerIntents.length > 0 && player) {
     const playerAction = playerIntents.find(i => i.playerId === player.id)?.action;
     if (playerAction) {
-      // If player is attacking, prioritize defense
-      if (playerAction.attackAp > 1) {
-        return { blockAp: Math.min(availableAp, 3), attackAp: Math.max(0, availableAp - 3), moveAp: 0, abilityActive: false, targetId: player.id };
+      // If player is attacking heavily, prioritize heavy defense
+      if (playerAction.attackAp >= 2) {
+        // Try to match with max block
+        const blockTier = getMaxTier(availableAp);
+        return { blockAp: blockTier, attackAp: 0, moveAp: 0, abilityActive: false, targetId: player.id };
       }
-      // If player is blocking, prioritize reservation or light attacks
-      if (playerAction.blockAp > 1) {
-        return { blockAp: 0, attackAp: 0, moveAp: 0, abilityActive: false };
+      // If player is blocking, prioritize reservation or pure offense if possible
+      if (playerAction.blockAp >= 2) {
+        return { blockAp: 0, attackAp: 0, moveAp: 0, abilityActive: false }; // Reserve
       }
     }
   }
 
-  // // Fix: Ensure mistake logic only triggers on NORMAL difficulty. 
-  // // Higher difficulties (Overclock, Blackout) use perfect logic (0 mistakes).
+  // Mistake Logic (Only for Normal/Easy)
   if (difficulty === DifficultyLevel.NORMAL && Math.random() < MISTAKE_RATES[config.difficulty]) {
     return generateRandomValidMove(availableAp, opponents);
   }
@@ -48,7 +70,8 @@ export function calculateAIMove(
     if (availableAp > 4) {
       return calculateAggroMove(aiPlayer, opponents, availableAp);
     } else {
-      return { blockAp: Math.min(availableAp, 2), attackAp: 0, moveAp: 0, abilityActive: false };
+      const blockTier = getMaxTier(Math.min(availableAp, 3)); // Spend up to 3 AP (Tier 2) on block
+      return { blockAp: blockTier, attackAp: 0, moveAp: 0, abilityActive: false };
     }
   }
 
@@ -58,7 +81,9 @@ export function calculateAIMove(
     if (cycle === 0) { // Turn 3: Burst
       return calculateAggroMove(aiPlayer, opponents, availableAp);
     } else { // Turn 1-2: Reserve
-      return { blockAp: 1, attackAp: 0, moveAp: 0, abilityActive: false };
+      // Spend 1 AP on Block if possible
+      const blockTier = getMaxTier(1);
+      return { blockAp: blockTier, attackAp: 0, moveAp: 0, abilityActive: false };
     }
   }
 
@@ -66,7 +91,8 @@ export function calculateAIMove(
   if (chapter === 3 && player) {
     if (player.hp < 200) {
       // Ignore defense, go all-in
-      return { blockAp: 0, attackAp: availableAp, moveAp: 0, abilityActive: true, targetId: player.id };
+      const attackTier = getMaxTier(availableAp);
+      return { blockAp: 0, attackAp: attackTier, moveAp: 0, abilityActive: true, targetId: player.id };
     }
   }
 
@@ -84,32 +110,57 @@ export function calculateAIMove(
 }
 
 function generateRandomValidMove(ap: number, opponents: Player[]): Action {
-  const block = Math.floor(Math.random() * (ap + 1));
-  const remaining = ap - block;
-  const attack = Math.floor(Math.random() * (remaining + 1));
+  // Randomly allocate budget
+  const budgetForBlock = Math.floor(Math.random() * (ap + 1));
+  const blockTier = getMaxTier(budgetForBlock);
+  const blockCost = getCost(blockTier);
+  
+  const remaining = ap - blockCost;
+  const attackTier = getMaxTier(remaining);
+  
   const target = opponents[Math.floor(Math.random() * opponents.length)]?.id;
-  return { blockAp: block, attackAp: attack, moveAp: 0, targetId: attack > 0 ? target : undefined, abilityActive: false };
+  return { blockAp: blockTier, attackAp: attackTier, moveAp: 0, targetId: attackTier > 0 ? target : undefined, abilityActive: false };
 }
 
 function calculateTurtleMove(ai: Player, opponents: Player[], ap: number): Action {
-  let blockAp = Math.min(ap, 2);
-  if (ai.hp < 300) blockAp = Math.min(ap, 3);
-  let attackAp = 0;
+  // Try to spend ~3-6 AP on block
+  let blockBudget = 3;
+  if (ai.hp < 300) blockBudget = 6;
+  
+  const blockTier = getMaxTier(Math.min(ap, blockBudget));
+  const blockCost = getCost(blockTier);
+  
+  let attackTier = 0;
   let targetId: string | undefined = undefined;
-  if (ai.hp > 500 && ap - blockAp >= 2) {
-    attackAp = 1;
+  
+  const remaining = ap - blockCost;
+  // If we have enough for a Level 1 attack (1 AP) and health is decent
+  if (ai.hp > 500 && remaining >= 1) {
+    attackTier = 1;
     targetId = opponents.sort((a, b) => a.hp - b.hp)[0]?.id;
   }
-  return { blockAp, attackAp, moveAp: 0, targetId, abilityActive: false };
+  
+  return { blockAp: blockTier, attackAp: attackTier, moveAp: 0, targetId, abilityActive: false };
 }
 
 function calculateAggroMove(ai: Player, opponents: Player[], ap: number): Action {
   const targetId = opponents.sort((a, b) => a.hp - b.hp)[0]?.id;
-  return { blockAp: 0, attackAp: Math.floor(ap / 2), moveAp: 0, targetId, abilityActive: false };
+  // Spend max on attack
+  const attackTier = getMaxTier(ap);
+  return { blockAp: 0, attackAp: attackTier, moveAp: 0, targetId, abilityActive: false };
 }
 
 function calculateStrategistMove(ai: Player, opponents: Player[], ap: number, history: TurnData[][]): Action {
   if (history.length < 2) return calculateTurtleMove(ai, opponents, ap);
+  
   const targetId = opponents.sort((a, b) => a.hp - b.hp)[0]?.id;
-  return { blockAp: 1, attackAp: Math.max(0, ap - 1), moveAp: 0, targetId, abilityActive: false };
+  
+  // Try to maintain Tier 1 Block (1 AP) and spend rest on Attack
+  const blockTier = getMaxTier(1);
+  const blockCost = getCost(blockTier);
+  
+  const remaining = ap - blockCost;
+  const attackTier = getMaxTier(remaining);
+  
+  return { blockAp: blockTier, attackAp: attackTier, moveAp: 0, targetId, abilityActive: false };
 }

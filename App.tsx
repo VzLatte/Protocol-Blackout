@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Phase, VisualLevel, Tab } from './types';
 import { useGameState } from './hooks/useGameState';
 import { SplashView } from './components/views/SplashView';
@@ -22,6 +22,7 @@ import { Button } from './components/ui/Button';
 import { AlertTriangle, Activity, Volume2, VolumeX, Share2, Info, MessageSquare, Shield, FileText, Gift, ChevronLeft, Target, Skull, Zap, Coins, Cpu, Globe, Database, Music } from 'lucide-react';
 import { CHAOS_DECK } from './constants';
 import { UNITS } from './operativeRegistry';
+import { AudioService } from './services/audioService';
 
 const App: React.FC = () => {
   const game = useGameState();
@@ -30,6 +31,21 @@ const App: React.FC = () => {
   const [promoCode, setPromoCode] = useState("");
   const [promoMessage, setPromoMessage] = useState<string | null>(null);
   const [activeDocument, setActiveDocument] = useState<{title: string, content: string} | null>(null);
+
+  // --- BGM Management ---
+  useEffect(() => {
+    const audio = AudioService.getInstance();
+    // Stop BGM on Splash or if disabled
+    const isSplash = game.phase === Phase.SPLASH;
+    
+    if (game.bgmEnabled && !isSplash) {
+      // Using direct raw content link
+      const menuBgm = "https://raw.githubusercontent.com/VzLatte/Protocol-Blackout/main/public/audio/Shadow%20in%20the%20Lobby.mp3";
+      audio.playBGM(menuBgm, game.bgmVolume);
+    } else {
+      audio.stopBGM();
+    }
+  }, [game.bgmEnabled, game.bgmVolume, game.phase]);
 
   const handlePromo = () => {
     if (!promoCode) return;
@@ -86,9 +102,16 @@ const App: React.FC = () => {
     });
   };
 
+  const handleInitialize = () => {
+    const audio = AudioService.getInstance();
+    audio.initContext();
+    playSfx('startup');
+    game.setPhase(Phase.GAME_TYPE_SELECTION);
+  };
+
   const renderActiveView = () => {
     if (game.phase === Phase.SPLASH) {
-       return <SplashView visualLevel={game.visualLevel} onInitialize={() => { playSfx('startup'); game.setPhase(Phase.GAME_TYPE_SELECTION); }} />;
+       return <SplashView visualLevel={game.visualLevel} onInitialize={handleInitialize} />;
     }
 
     if (currentTab === Tab.MARKET) {

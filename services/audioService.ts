@@ -15,7 +15,7 @@ export class AudioService {
     return AudioService.instance;
   }
 
-  private initContext() {
+  public initContext() {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioCtx) {
@@ -27,28 +27,46 @@ export class AudioService {
       }
     }
     if (this.ctx?.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(e => console.error("AudioContext resume failed", e));
     }
   }
 
   playBGM(url: string, volume: number) {
     this.initContext();
     
-    // If BGM is already playing this URL, just update volume and return to prevent restart
     if (this.bgm) {
-      const currentSrc = this.bgm.src;
-      if (currentSrc.endsWith(url) || url.endsWith(currentSrc)) {
+      // Normalize URLs for reliable comparison (handles encoding like %20)
+      const currentSrc = new URL(this.bgm.src, window.location.href).href;
+      const targetSrc = new URL(url, window.location.href).href;
+
+      if (currentSrc === targetSrc) {
         this.bgm.volume = volume;
+        // Crucial: Attempt to play even if source matches, 
+        // in case it was previously blocked by autoplay policy.
+        if (this.bgm.paused) {
+          this.bgm.play().catch(() => {
+            // Silently fail if still blocked; it will try again on next interaction/state change
+          });
+        }
         return;
       }
       this.bgm.pause();
       this.bgm = null;
     }
 
-    this.bgm = new Audio(url);
+    this.bgm = new Audio();
+    this.bgm.crossOrigin = "anonymous";
+    this.bgm.src = url;
     this.bgm.loop = true;
     this.bgm.volume = volume;
-    this.bgm.play().catch(e => console.debug("BGM Autoplay blocked or failed", e));
+    
+    // Play with catch to handle browser autoplay restrictions gracefully
+    const playPromise = this.bgm.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(e => {
+        console.debug("BGM playback deferred until user interaction.", e);
+      });
+    }
   }
 
   stopBGM() {

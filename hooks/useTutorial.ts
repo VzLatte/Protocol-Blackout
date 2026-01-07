@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { TutorialState } from '../types';
+import { ATTACK_CONFIG, BLOCK_CONFIG } from '../constants';
 
 export function useTutorial(hasCompletedTutorial: boolean) {
   const [tutorial, setTutorial] = useState<TutorialState>({ 
@@ -8,22 +9,14 @@ export function useTutorial(hasCompletedTutorial: boolean) {
     isActive: !hasCompletedTutorial 
   });
 
+  // Updated to not auto-advance during text phases (1-3)
   const checkTutorialProgress = (localBlockAp: number, localAttackAp: number) => {
-    if (!tutorial.isActive) return;
-
-    const totalSpent = (localBlockAp * 1) + (localAttackAp * 2);
-
-    if (tutorial.step === 2 && totalSpent > 0) {
-      setTutorial(prev => ({ ...prev, step: 3 }));
-    } else if (tutorial.step === 3 && totalSpent >= 2) {
-      setTutorial(prev => ({ ...prev, step: 4 }));
-    }
+    // Logic moved to explicit advancement in View for smoother UX
+    // Keeping this function signature for compatibility if needed elsewhere
   };
 
   const advanceTutorial = () => {
-    if (tutorial.step === 1) {
-      setTutorial(prev => ({ ...prev, step: 2 }));
-    }
+    setTutorial(prev => ({ ...prev, step: prev.step + 1 }));
   };
 
   const completeTutorial = () => {

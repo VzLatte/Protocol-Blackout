@@ -1,5 +1,4 @@
 
-
 export enum GameMode {
   TACTICAL = 'TACTICAL',
   CHAOS = 'CHAOS'
@@ -24,14 +23,12 @@ export enum Tab {
   ARCHIVE = 'ARCHIVE'
 }
 
-/* Added missing RangeZone enum for tactical distance tracking */
 export enum RangeZone {
   CLOSE = 'CLOSE',
   MID = 'MID',
   FAR = 'FAR'
 }
 
-/* Added missing MoveIntent enum for directional movement */
 export enum MoveIntent {
   CLOSE = 'CLOSE',
   OPEN = 'OPEN'
@@ -85,48 +82,40 @@ export enum AIDifficulty {
 
 export enum HazardType {
   NONE = 'NONE',
-  DATA_STORM = 'DATA_STORM', // Periodic damage at Far range
-  VIRAL_INVERSION = 'VIRAL_INVERSION', // Healing hurts
-  LAVA_FLOOR = 'LAVA_FLOOR', // Movement deals damage
-  FOG_OF_WAR = 'FOG_OF_WAR', // Hidden enemy intent/range
-  AP_FLUX = 'AP_FLUX', // Random AP generation
-  NULL_FIELD = 'NULL_FIELD', // No Abilities allowed
-  GRAVITY_WELL = 'GRAVITY_WELL', // Movement costs double
-  OVERLOAD = 'OVERLOAD', // High damage deals recoil
+  DATA_STORM = 'DATA_STORM',
+  VIRAL_INVERSION = 'VIRAL_INVERSION',
+  LAVA_FLOOR = 'LAVA_FLOOR',
+  FOG_OF_WAR = 'FOG_OF_WAR',
+  AP_FLUX = 'AP_FLUX',
+  NULL_FIELD = 'NULL_FIELD',
+  GRAVITY_WELL = 'GRAVITY_WELL',
+  OVERLOAD = 'OVERLOAD',
 }
 
 export enum WinCondition {
-  ELIMINATION = 'ELIMINATION', // Kill enemy
-  SURVIVAL = 'SURVIVAL', // Survive X rounds
-  UPLOAD = 'UPLOAD', // End turn at Range 0 for X turns
-  RESOURCE_HOLD = 'RESOURCE_HOLD', // End with X AP
+  ELIMINATION = 'ELIMINATION',
+  SURVIVAL = 'SURVIVAL',
+  UPLOAD = 'UPLOAD',
+  RESOURCE_HOLD = 'RESOURCE_HOLD',
 }
 
 export interface CampaignLevel {
   id: string;
   chapter: number;
-  sequence: number; // 1-12
+  sequence: number;
   title: string;
   description: string;
-  
-  // Enemy Configuration
   enemyUnit: UnitType;
   enemyName?: string; 
   enemyAi: AIArchetype;
   enemyCount: number; 
   enemyHpMult: number; 
-  
-  // Tactical Modifiers
   hazard: HazardType;
   winCondition: WinCondition;
   winValue: number; 
-  
-  // Rewards
   creditReward: number;
   xpReward: number;
   unlockUnit?: UnitType; 
-  
-  // Narrative
   introText: string;
   winText: string;
   lossText: string;
@@ -147,7 +136,8 @@ export interface Unit {
   maxHp: number;
   speed: number;
   focus: number;
-  dmgMultiplier: number;
+  atkStat: number; // Replaces dmgMultiplier
+  defStat: number; // New stat for Shield scaling
   passiveDesc: string;
   activeDesc: string;
   cooldownMax: number; 
@@ -167,7 +157,8 @@ export interface Player {
   hp: number;
   maxHp: number;
   ap: number;
-  fatigue: number; 
+  moveFatigue: number; // Tracks consecutive moves for cost scaling
+  blockFatigue: number; // "Overheat" - Tracks consecutive blocks
   isEliminated: boolean;
   isAI: boolean;
   aiConfig?: AIConfig;
@@ -192,12 +183,11 @@ export enum ActionType {
 }
 
 export interface Action {
-  blockAp: number;
-  attackAp: number;
-  moveAp: number;
+  blockAp: number; // 0-3
+  attackAp: number; // 0-3
+  moveAp: number; // 0 or 1 (cost calculated based on fatigue)
   abilityActive: boolean;
   targetId?: string;
-  /* Updated to use MoveIntent enum instead of inline literal */
   moveIntent?: MoveIntent;
 }
 
@@ -218,7 +208,7 @@ export interface ResolutionLog {
   apSpent?: number;
   resultMessage: string;
   isElimination?: boolean;
-  isCracked?: boolean;
+  isCracked?: boolean; // Used for "Chip Damage" or Overheat break
   mitigationPercent?: number;
   defenseTier?: number;
   rangeChange?: string;

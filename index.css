@@ -2,12 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+
 body {
     font-family: 'Inter', sans-serif;
     background-color: #020617;
     color: #f8fafc;
-    overflow: hidden; /* Changed from overflow-x to prevent vertical bounce */
-    height: 100dvh;
+    overflow-x: hidden;
+    height: 100%;
 }
 
 .font-mono {
@@ -195,3 +196,46 @@ body {
     background: #1e293b;
     border-radius: 10px;
 }
+
+/* Battle Animations */
+@keyframes lunge-right {
+    0% { transform: translateX(0) scale(1); }
+    40% { transform: translateX(40px) scale(1.1); }
+    100% { transform: translateX(0) scale(1); }
+}
+
+@keyframes lunge-left {
+    0% { transform: translateX(0) scale(1); }
+    40% { transform: translateX(-40px) scale(1.1); }
+    100% { transform: translateX(0) scale(1); }
+}
+
+@keyframes shake-hit {
+    0%, 100% { transform: translateX(0); filter: brightness(1); }
+    10% { transform: translateX(-5px) rotate(-2deg); filter: brightness(2) saturate(0) sepia(1) hue-rotate(-50deg) saturate(5); } /* Red Flash */
+    30% { transform: translateX(5px) rotate(2deg); }
+    50% { transform: translateX(-5px); }
+    70% { transform: translateX(5px); }
+}
+
+@keyframes fade-out-down {
+    0% { opacity: 1; transform: translateY(0); filter: grayscale(0); }
+    100% { opacity: 0; transform: translateY(30px); filter: grayscale(1); }
+}
+
+@keyframes float-idle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+@keyframes spawn-in {
+    0% { opacity: 0; transform: scale(0.9); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+.animate-lunge-right { animation: lunge-right 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+.animate-lunge-left { animation: lunge-left 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+.animate-shake-hit { animation: shake-hit 0.5s ease-out; }
+.animate-faint { animation: fade-out-down 1.2s forwards ease-in; }
+.animate-float { animation: float-idle 3s ease-in-out infinite; }
+.animate-spawn { animation: spawn-in 0.5s ease-out; }

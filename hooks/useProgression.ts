@@ -2,83 +2,80 @@
 import { useState, useEffect } from 'react';
 import { UnitType } from '../types';
 import { UNIT_PRICES } from '../operativeRegistry';
+import { PersistenceService } from '../services/persistenceService';
+
+export interface GameStats {
+  wins: number;
+  losses: number;
+  totalGames: number;
+}
 
 export function useProgression() {
   const [credits, setCredits] = useState<number>(() => 
-    parseInt(localStorage.getItem('protocol_credits') || '0')
+    PersistenceService.load('protocol_credits', 0)
   );
   const [xp, setXp] = useState<number>(() => 
-    parseInt(localStorage.getItem('protocol_xp') || '0')
+    PersistenceService.load('protocol_xp', 0)
   );
-  const [unlockedUnits, setUnlockedUnits] = useState<UnitType[]>(() => {
-    const saved = localStorage.getItem('protocol_unlocks');
-    // Lock all besides GHOST initially
-    return saved ? JSON.parse(saved) : [UnitType.GHOST];
-  });
-  const [cipheredUnits, setCipheredUnits] = useState<UnitType[]>(() => {
-    const saved = localStorage.getItem('protocol_ciphers');
-    // Default encounterable starting roster
-    return saved ? JSON.parse(saved) : [UnitType.GHOST, UnitType.AEGIS, UnitType.REAPER];
-  });
-  const [masteryLevels, setMasteryLevels] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem('protocol_mastery');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [unlockedUnits, setUnlockedUnits] = useState<UnitType[]>(() => 
+    PersistenceService.load('protocol_unlocks', [UnitType.GHOST, UnitType.AEGIS, UnitType.REAPER])
+  );
   const [highestLevelReached, setHighestLevelReached] = useState<number>(() => 
-    parseInt(localStorage.getItem('protocol_progression') || '1')
+    PersistenceService.load('protocol_progression', 1)
   );
-  const [highestDifficultyReached, setHighestDifficultyReached] = useState<number>(() => 
-    parseInt(localStorage.getItem('protocol_difficulty_progression') || '0')
+  const [hasCompletedTutorial, setHasCompletedTutorial] = useState(() => 
+    PersistenceService.load('protocol_has_completed_tutorial', false)
   );
-  const [stats, setStats] = useState(() => {
-    const saved = localStorage.getItem('protocol_stats');
-    return saved ? JSON.parse(saved) : { wins: 0, losses: 0, totalGames: 0 };
-  });
+  const [hasSeenIntro, setHasSeenIntro] = useState(() => 
+    PersistenceService.load('protocol_has_seen_intro', false)
+  );
+  
+  const [stats, setStats] = useState<GameStats>(() => 
+    PersistenceService.load('protocol_stats', { wins: 0, losses: 0, totalGames: 0 })
+  );
 
   useEffect(() => {
-    localStorage.setItem('protocol_credits', credits.toString());
-    localStorage.setItem('protocol_xp', xp.toString());
-    localStorage.setItem('protocol_unlocks', JSON.stringify(unlockedUnits));
-    localStorage.setItem('protocol_ciphers', JSON.stringify(cipheredUnits));
-    localStorage.setItem('protocol_mastery', JSON.stringify(masteryLevels));
-    localStorage.setItem('protocol_progression', highestLevelReached.toString());
-    localStorage.setItem('protocol_difficulty_progression', highestDifficultyReached.toString());
-    localStorage.setItem('protocol_stats', JSON.stringify(stats));
-  }, [credits, xp, unlockedUnits, cipheredUnits, masteryLevels, highestLevelReached, highestDifficultyReached, stats]);
+    PersistenceService.saveDebounced('protocol_credits', credits);
+    PersistenceService.saveDebounced('protocol_xp', xp);
+  }, [credits, xp]);
 
-  const addCredits = (amount: number) => setCredits(p => p + amount);
-  const addXp = (amount: number) => setXp(p => p + amount);
-  
+  useEffect(() => {
+    PersistenceService.save('protocol_unlocks', unlockedUnits);
+    PersistenceService.save('protocol_progression', highestLevelReached);
+    PersistenceService.save('protocol_has_completed_tutorial', hasCompletedTutorial);
+    PersistenceService.save('protocol_has_seen_intro', hasSeenIntro);
+    PersistenceService.save('protocol_stats', stats);
+  }, [unlockedUnits, highestLevelReached, hasCompletedTutorial, hasSeenIntro, stats]);
+
   const purchaseUnit = (type: UnitType) => {
     const price = UNIT_PRICES[type].cost;
-    const isCiphered = cipheredUnits.includes(type);
-    if (credits >= price && !unlockedUnits.includes(type) && isCiphered) {
+    if (credits >= price && !unlockedUnits.includes(type)) {
       setCredits(prev => prev - price);
       setUnlockedUnits(prev => [...prev, type]);
+      PersistenceService.save('protocol_credits', credits - price);
       return true;
     }
     return false;
   };
 
-  const getMastery = (type: UnitType) => masteryLevels[type] || 1;
-  const incrementMastery = (type: UnitType) => {
-    setMasteryLevels(prev => ({
-      ...prev,
-      [type]: (prev[type] || 1) + 1
+  const updateStats = (isWin: boolean) => {
+    setStats(prev => ({
+      wins: prev.wins + (isWin ? 1 : 0),
+      losses: prev.losses + (isWin ? 0 : 1),
+      totalGames: prev.totalGames + 1
     }));
   };
 
-  const level = Math.floor(xp / 1000) + 1;
-
   return {
-    credits, addCredits, 
-    xp, addXp, level,
-    unlockedUnits, setUnlockedUnits, 
-    cipheredUnits, setCipheredUnits,
-    purchaseUnit,
-    masteryLevels, getMastery, incrementMastery,
+    credits, setCredits,
+    xp, setXp,
+    unlockedUnits, setUnlockedUnits,
     highestLevelReached, setHighestLevelReached,
-    highestDifficultyReached, setHighestDifficultyReached,
-    stats, setStats
+    hasCompletedTutorial, setHasCompletedTutorial,
+    hasSeenIntro, setHasSeenIntro,
+    stats, setStats, updateStats,
+    purchaseUnit,
+    cipheredUnits: [UnitType.GHOST, UnitType.AEGIS, UnitType.REAPER], 
+    getMastery: (t: UnitType) => 1,
   };
 }
