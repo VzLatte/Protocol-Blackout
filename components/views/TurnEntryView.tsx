@@ -1,67 +1,207 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ScreenWrapper } from '../layout/ScreenWrapper';
 import { GlobalHeader } from '../layout/GlobalHeader';
 import { Button } from '../ui/Button';
-import { Shield, Skull, ChevronDown, ChevronUp, Brain, Zap, Activity, Heart, ChevronRight, Minus, Plus, Move, AlertTriangle, Info, ArrowUp } from 'lucide-react';
-import { BASE_ATTACK_DMG, ATTACK_CONFIG, BLOCK_CONFIG, RANGE_NAMES } from '../../constants';
-import { Phase, ActionType, UnitType, MoveIntent } from '../../types';
-import { BattleStage } from './BattleStage';
+import { Shield, Skull, ChevronUp, Brain, Zap, Activity, Heart, ChevronRight, Minus, Plus, Move, Undo, Target } from 'lucide-react';
+import { BASE_ATTACK_DMG, ATTACK_CONFIG, BLOCK_CONFIG, DESPERATION_MOVES } from '../../constants';
+import { Phase, ActionType, UnitType, Position, TileType } from '../../types';
+import { TacticalGrid } from '../tactical/TacticalGrid';
+import { getStride, getReachableTiles, getManhattanDistance, getObstaclesInLine, ReachableTile } from '../../utils/gridLogic';
 
 interface TurnEntryViewProps {
   game: any;
 }
 
+const TutorialOverlay: React.FC<{ step: number, onNext: () => void }> = ({ step, onNext }) => {
+  const content = [
+    {
+      title: "TACTICAL BRIEFING",
+      text: "Welcome to PROTOCOL. Your goal is to eliminate the enemy operative before they eliminate you.",
+      position: "top-1/4"
+    },
+    {
+      title: "ENERGY MANAGEMENT",
+      text: "This is your AP (Action Points). You gain +2 AP every round. Moving, Attacking, and Defending all cost AP. Don't run out.",
+      position: "bottom-1/3" // Near the AP bar
+    },
+    {
+      title: "MANEUVERING",
+      text: "Select 'MANEUVER' to move on the grid. Spend AP to move further. Flanking your enemy increases damage.",
+      position: "bottom-1/4"
+    },
+    {
+      title: "COMBAT PROTOCOLS",
+      text: "Select 'WEAPON SYSTEMS' to attack. Closer range deals more damage. Higher tiers cost more AP but deal massive damage.",
+      position: "bottom-1/4"
+    },
+    {
+      title: "DEFENSE MATRIX",
+      text: "If you end your turn with unspent AP, it won't save you from a bullet. Use 'SHIELD' to block incoming damage.",
+      position: "bottom-1/4"
+    },
+    {
+      title: "EXECUTE",
+      text: "Turns happen simultaneously. Plan your move, anticipate theirs, and press EXECUTE when ready.",
+      position: "bottom-[10%]"
+    }
+  ];
+
+  const current = content[step - 1];
+  if (!current) return null;
+
+  return (
+    <div className="absolute inset-0 z-50 pointer-events-auto flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+       <div className={`absolute w-[90%] max-w-sm bg-slate-900 border border-teal-500 p-6 rounded-3xl shadow-2xl animate-in zoom-in duration-300 ${current.position}`}>
+          <div className="flex items-center gap-3 mb-3">
+             <div className="w-8 h-8 rounded-full bg-teal-500 text-black flex items-center justify-center font-black text-xs">{step}</div>
+             <h3 className="text-sm font-black italic text-white uppercase">{current.title}</h3>
+          </div>
+          <p className="text-xs text-slate-300 font-mono leading-relaxed mb-6">{current.text}</p>
+          <Button variant="primary" size="md" onClick={onNext} className="w-full">
+             {step === content.length ? "BEGIN OPERATION" : "NEXT INTEL"}
+          </Button>
+       </div>
+    </div>
+  );
+};
+
 export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
-  const { playSfx, credits, round, distanceMatrix, submitAction, tutorial, setTutorial } = game;
+  const { playSfx, credits, submitAction, tutorial, advanceTutorial, distanceMatrix } = game;
   const p = game.players[game.currentPlayerIdx];
   const otherPlayers = game.players.filter((x: any) => x.id !== p.id && !x.isEliminated);
   
   // Local drafting state
-  const [localBlockTier, setLocalBlockTier] = useState(0); // 0, 1, 2, 3
-  const [localAttackTier, setLocalAttackTier] = useState(0); // 0, 1, 2, 3
-  const [localMoveActive, setLocalMoveActive] = useState(false);
-  const [localMoveIntent, setLocalMoveIntent] = useState<MoveIntent>(MoveIntent.CLOSE);
+  const [localBlockTier, setLocalBlockTier] = useState(0); 
+  const [localAttackTier, setLocalAttackTier] = useState(0); 
+  // We now track a path of positions. Start is implicitly p.position.
+  const [localMovePath, setLocalMovePath] = useState<Position[]>([]);
+  const [localMoveAp, setLocalMoveAp] = useState(0);
   const [localAbilityActive, setLocalAbilityActive] = useState(false);
   const [localTargetId, setLocalTargetId] = useState<string | undefined>(otherPlayers[0]?.id);
+  const [moveMode, setMoveMode] = useState(false); 
   
   // Sheet State
-  const [isSheetExpanded, setIsSheetExpanded] = useState(false);
+  const [isSheetExpanded, setIsSheetExpanded] = useState(true); 
   const touchStartY = useRef(0);
 
-  // Dynamic Costs (Triangular Logic: 1, 3, 6)
-  const moveCost = localMoveActive ? (1 + (p.moveFatigue || 0)) : 0;
+  // Computed Values
   // @ts-ignore
-  const attackCost = localAttackTier > 0 ? ATTACK_CONFIG[localAttackTier].ap : 0;
+  const attackConfig = localAttackTier > 0 ? ATTACK_CONFIG[localAttackTier] : null;
+  const attackCost = attackConfig ? attackConfig.ap : 0;
   // @ts-ignore
   const blockCost = localBlockTier > 0 ? BLOCK_CONFIG[localBlockTier].ap : 0;
   
-  const totalSpent = blockCost + attackCost + moveCost;
+  // AP Calc
+  const availableAp = p.ap - blockCost - attackCost;
+  const totalSpent = blockCost + attackCost + localMoveAp;
   const remainingAp = p.ap - totalSpent;
-  
-  const targetPlayer = localTargetId ? game.players.find((pl: any) => pl.id === localTargetId) : otherPlayers[0];
+  const availableApForNextMove = remainingAp; // If I have 1 AP left, I can add another leg.
 
-  // Helper Logic
-  const getRangeData = (tid: string) => {
-    const key = [p.id, tid].sort().join('-');
-    const val = distanceMatrix.get(key) ?? 1;
-    return { name: RANGE_NAMES[val as keyof typeof RANGE_NAMES], val };
+  const targetPlayer = localTargetId ? game.players.find((pl: any) => pl.id === localTargetId) : undefined;
+  const isCritical = p.hp < (p.maxHp * 0.15) && !p.desperationUsed && p.unit;
+  const desperationMove = p.unit ? DESPERATION_MOVES[p.unit.type] : null;
+
+  // Grid Data
+  const stride = getStride(p.unit?.speed || 1);
+  const currentStartPos = localMovePath.length > 0 ? localMovePath[localMovePath.length - 1] : p.position;
+  
+  // Filter occupied tiles: All players except self
+  const occupied = game.players
+    .filter((pl: any) => pl.id !== p.id && !pl.isEliminated)
+    .map((pl: any) => pl.position);
+
+  // Get reachable from CURRENT tip of path
+  const reachableTiles = moveMode 
+    ? getReachableTiles(currentStartPos, stride, availableApForNextMove, game.activeMap, occupied) 
+    : [];
+
+  const handleTileClick = (pos: Position) => {
+    if (!moveMode) return;
+    
+    // Check if reachable
+    const tile = reachableTiles.find(r => r.x === pos.x && r.y === pos.y);
+    if (tile && tile.costInAp <= availableApForNextMove) {
+      setLocalMovePath([...localMovePath, { x: pos.x, y: pos.y }]);
+      setLocalMoveAp(prev => prev + tile.costInAp);
+      playSfx('confirm');
+    }
   };
 
+  const toggleMoveMode = () => {
+    if (moveMode) {
+      setMoveMode(false);
+    } else {
+      setMoveMode(true);
+    }
+    playSfx('confirm');
+  };
+
+  const handleResetMove = () => {
+      setLocalMovePath([]);
+      setLocalMoveAp(0);
+      playSfx('cancel');
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const deltaY = touchStartY.current - e.changedTouches[0].clientY;
+    if (Math.abs(deltaY) > 50) {
+      if (deltaY > 0) setIsSheetExpanded(true); 
+      else setIsSheetExpanded(false); 
+    }
+  };
+
+  // Helper for Attack Projection (Hit and Run aware)
+  // NOW STRICTLY CHECKS LOS AND RANGE
   const calculateProjectedDmg = (target: any) => {
     if (localAttackTier === 0) return 0;
-    const { val: rangeVal } = getRangeData(target.id);
-    const rangeMult = rangeVal === 0 ? 1.2 : rangeVal === 2 ? (0.75 + (p.unit?.focus || 0)) : 1.0;
     
+    // Check from all points in path (Hit and Run)
+    const pathPoints = [p.position, ...localMovePath];
+    let bestMult = 0;
+    let hasValidShot = false;
+
+    const unitRange = p.unit?.range || 2;
+    const unitType = p.unit?.type;
+
+    pathPoints.forEach(pos => {
+        const dist = getManhattanDistance(pos, target.position);
+        
+        // 1. Strict Range Check
+        if (dist > unitRange) return;
+
+        // 2. Strict LOS Check
+        const obstacles = getObstaclesInLine(pos, target.position, game.activeMap);
+        let allowedObstacles = 0;
+        if (unitType === UnitType.TROJAN) allowedObstacles = 1;
+        if (unitType === UnitType.GHOST && localAttackTier === 3) allowedObstacles = 1;
+
+        if (obstacles > allowedObstacles) return;
+
+        // If here, shot is possible
+        hasValidShot = true;
+
+        let rangeMult = 1.0;
+        if (dist <= 1) rangeMult = 1.25;
+        
+        // Bonus for being on Threshold
+        const tileType = game.activeMap.tiles[pos.y][pos.x];
+        const thresholdBonus = (tileType === TileType.THRESHOLD) ? 1.10 : 1.0;
+
+        const totalMult = rangeMult * thresholdBonus;
+        if (totalMult > bestMult) bestMult = totalMult;
+    });
+
+    if (!hasValidShot) return 0; // 0 Indicates Invalid/Blocked
+
     // @ts-ignore
     const atkConfig = ATTACK_CONFIG[localAttackTier];
     const base = BASE_ATTACK_DMG * atkConfig.mult * (p.unit?.atkStat || 1.0);
-    
-    let bonus = 1.0;
-    if (p.unit?.type === UnitType.KILLSHOT) bonus *= 1.1;
-    if (p.targetLockId === target.id) bonus *= 1.3;
-    
-    return Math.floor(base * rangeMult * bonus);
+    return Math.floor(base * bestMult);
   };
 
   const calculateShield = () => {
@@ -73,98 +213,9 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
     return Math.floor(base * (1 - penalty));
   };
 
-  // Swipe Handlers
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY;
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const deltaY = touchStartY.current - e.changedTouches[0].clientY;
-    if (Math.abs(deltaY) > 50) {
-      if (deltaY > 0) setIsSheetExpanded(true); // Swipe Up
-      else setIsSheetExpanded(false); // Swipe Down
-    }
-  };
-
-  // Tutorial Render Helper
-  const renderTutorialOverlay = () => {
-    const isTutorialLevel = game.currentCampaignLevelId === 'C1-L1';
-    if (!tutorial.isActive || tutorial.step > 4 || !isTutorialLevel) return null;
-
-    const stepContent = [
-      {
-        title: "OBJECTIVE: SURVIVE",
-        text: "Welcome, Operative. Your primary goal is to eliminate the enemy unit by reducing their HP to 0. You must balance aggression with defense to survive.",
-        action: () => game.advanceTutorial()
-      },
-      {
-        title: "KNOW YOUR TOOLS",
-        text: (
-          <div className="space-y-2">
-            <p>Every unit has distinct abilities.</p>
-            <div className="bg-slate-800 p-2 rounded-lg border border-slate-700">
-              <span className="text-[10px] text-teal-400 font-bold uppercase block">Passive (Always On)</span>
-              <span className="text-[9px] text-slate-300">{p.unit?.passiveDesc}</span>
-            </div>
-            <div className="bg-slate-800 p-2 rounded-lg border border-slate-700">
-              <span className="text-[10px] text-amber-500 font-bold uppercase block">Active (Requires Activation)</span>
-              <span className="text-[9px] text-slate-300">{p.unit?.activeDesc}</span>
-            </div>
-          </div>
-        ),
-        action: () => game.advanceTutorial()
-      },
-      {
-        title: "SYSTEM FATIGUE",
-        text: (
-          <ul className="list-disc pl-4 space-y-2">
-            <li><strong>MOVEMENT:</strong> Consumes 1 AP but generates <span className="text-purple-400">FATIGUE</span>. Consecutive moves cost more AP.</li>
-            <li><strong>BLOCKING:</strong> Using defense generates <span className="text-amber-500">OVERHEAT</span>. Consecutive blocking reduces shield efficiency by 15% per stack.</li>
-          </ul>
-        ),
-        action: () => game.advanceTutorial()
-      },
-      {
-        title: "ALLOCATE ENERGY",
-        text: "You have Action Points (AP). Costs follow a triangular curve: Level 1 = 1 AP, Level 2 = 3 AP, Level 3 = 6 AP.\n\nTry allocating your points now. Unused AP is reserved for the next turn.",
-        action: () => {
-           setIsSheetExpanded(true); // Open sheet for them
-           game.setTutorial((prev: any) => ({ ...prev, step: 5 })); // Advance to hidden state
-        }
-      }
-    ];
-
-    const content = stepContent[tutorial.step - 1];
-    if (!content) return null;
-
-    return (
-      <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-6 animate-in fade-in duration-300">
-         <div className="bg-slate-900 border border-teal-500 p-6 rounded-3xl max-w-md w-full shadow-2xl space-y-6 relative">
-            <div className="flex items-center gap-3 text-teal-400 border-b border-slate-800 pb-4">
-               <Info size={24} />
-               <h3 className="text-lg font-black uppercase italic tracking-wider">{content.title}</h3>
-            </div>
-            <div className="text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap">
-               {content.text}
-            </div>
-            
-            {tutorial.step === 4 ? (
-               <div className="p-3 bg-teal-500/10 border border-teal-500/30 rounded-xl text-[10px] text-teal-300 font-mono text-center animate-pulse">
-                  Dismiss this overlay to begin allocation.
-               </div>
-            ) : null}
-
-            <Button variant="primary" onClick={content.action} className="w-full">
-               {tutorial.step === 4 ? "ACCESS TERMINAL" : "NEXT PROTOCOL"}
-            </Button>
-            
-            <div className="absolute -top-3 -right-3 bg-slate-800 text-slate-400 text-[8px] font-bold px-2 py-1 rounded-full border border-slate-600">
-               STEP {tutorial.step} / 4
-            </div>
-         </div>
-      </div>
-    );
-  };
+  // Validation for Execute Button
+  const currentTargetDmg = targetPlayer ? calculateProjectedDmg(targetPlayer) : 0;
+  const isAttackValid = localAttackTier === 0 || (!!localTargetId && currentTargetDmg > 0);
 
   if (game.isAIThinking) {
     return (
@@ -182,25 +233,36 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
 
   return (
     <ScreenWrapper visualLevel={game.visualLevel} className="bg-[#020617]" noScroll centerContent={false}>
+      {tutorial.isActive && <TutorialOverlay step={tutorial.step} onNext={advanceTutorial} />}
+      
       <GlobalHeader phase={Phase.TURN_ENTRY} onHelp={() => game.setIsHelpOpen(true)} onSettings={() => game.setIsSettingsOpen(true)} onExit={() => game.setIsExitConfirming(true)} credits={credits} xp={game.xp} />
       
-      {/* BACKGROUND BATTLE STAGE */}
-      <div className="absolute inset-0 top-0 z-0">
-         <BattleStage 
-            leftPlayer={p} 
-            rightPlayer={targetPlayer || null} 
-            animState={{ 
-               left: localAttackTier > 0 ? 'attack' : 'idle', 
-               right: 'idle' 
-            }} 
-            className="w-full h-full pb-[35vh]" 
-         />
+      {/* TACTICAL GRID LAYER */}
+      <div className="flex-1 w-full bg-[#050b14] relative overflow-hidden flex flex-col items-center pt-4">
+          <TacticalGrid 
+            map={game.activeMap}
+            players={game.players}
+            currentPlayerId={p.id}
+            reachableTiles={reachableTiles} 
+            selectedDest={currentStartPos} // Highlight where we are currently 'planning' from
+            onTileClick={handleTileClick}
+            targetId={localAttackTier > 0 && isAttackValid ? localTargetId : undefined}
+          />
+          
+          {/* Movement Path Visualization Overlay */}
+          {localMovePath.length > 0 && (
+             <div className="absolute top-4 left-1/2 -translate-x-1/2 flex gap-1 pointer-events-none">
+                {localMovePath.map((_, i) => (
+                   <div key={i} className="w-2 h-2 rounded-full bg-sky-500 animate-pulse"></div>
+                ))}
+             </div>
+          )}
       </div>
 
       {/* SWIPEABLE ALLOCATION CARD */}
       <div 
          className={`absolute bottom-0 left-0 right-0 bg-[#0a0f1e]/95 backdrop-blur-2xl rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.6)] border-t border-slate-700/50 z-20 transition-all duration-500 ease-out flex flex-col`}
-         style={{ height: isSheetExpanded ? '85%' : '40%' }}
+         style={{ height: isSheetExpanded ? '70%' : '25%' }}
       >
          {/* Handle / Header Area */}
          <div 
@@ -209,9 +271,9 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
             onTouchEnd={handleTouchEnd}
             onClick={() => setIsSheetExpanded(!isSheetExpanded)}
          >
-            <div className="w-16 h-1.5 bg-slate-700/50 rounded-full mx-auto mb-6"></div>
+            <div className="w-16 h-1.5 bg-slate-700/50 rounded-full mx-auto mb-2"></div>
             
-            <div className="grid grid-cols-2 gap-4 mb-2">
+            <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center gap-3">
                    <div className="h-10 w-10 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center justify-center text-red-500 shrink-0">
                       <Heart size={20} />
@@ -233,199 +295,145 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
                    </div>
                 </div>
             </div>
-            
-            {!isSheetExpanded && (
-               <div className="text-center mt-4 animate-pulse">
-                  <span className="text-[9px] font-mono text-slate-500 uppercase tracking-[0.3em]">Swipe Up to Command</span>
-                  <ChevronUp size={16} className="mx-auto text-slate-600 mt-1" />
-               </div>
-            )}
          </div>
 
          {/* Expanded Controls */}
          <div className={`flex-1 overflow-y-auto custom-scrollbar px-6 pb-24 space-y-4 transition-opacity duration-300 ${isSheetExpanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
             
             {/* Ability Card */}
-            <div className={`p-5 rounded-[2rem] border transition-all ${localAbilityActive ? 'bg-amber-500/10 border-amber-500/50' : 'bg-slate-900/40 border-slate-800'}`}>
+            <div className={`p-4 rounded-[2rem] border transition-all ${localAbilityActive ? 'bg-amber-500/10 border-amber-500/50' : 'bg-slate-900/40 border-slate-800'}`}>
                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                      <div className={`p-2 rounded-xl ${localAbilityActive ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-500'}`}>
-                        <Activity size={20} />
+                        <Activity size={16} />
                      </div>
                      <div>
-                        <h3 className="text-xs font-black uppercase text-white tracking-wide">{p.unit?.passiveDesc.split(':')[0]}</h3>
-                        <p className="text-[9px] text-slate-500 font-mono uppercase">{p.unit?.activeDesc}</p>
+                        <h3 className="text-[10px] font-black uppercase text-white tracking-wide">{p.unit?.passiveDesc.split(':')[0]}</h3>
+                        <p className="text-[8px] text-slate-500 font-mono uppercase truncate max-w-[150px]">{p.unit?.activeDesc}</p>
                      </div>
                   </div>
                   <button 
                      onClick={() => { if(!p.activeUsed && p.cooldown <= 0) setLocalAbilityActive(!localAbilityActive); playSfx('confirm'); }}
                      disabled={p.activeUsed || p.cooldown > 0}
-                     className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase transition-all ${localAbilityActive ? 'bg-amber-500 text-black shadow-[0_0_15px_rgba(245,158,11,0.4)]' : 'bg-slate-800 text-slate-500'}`}
+                     className={`px-3 py-2 rounded-xl font-black text-[9px] uppercase transition-all ${localAbilityActive ? 'bg-amber-500 text-black shadow-[0_0_15px_rgba(245,158,11,0.4)]' : 'bg-slate-800 text-slate-500'}`}
                   >
-                     {p.activeUsed ? 'OFFLINE' : p.cooldown > 0 ? `CD: ${p.cooldown}` : localAbilityActive ? 'ACTIVE' : 'ACTIVATE'}
+                     {p.activeUsed ? 'OFF' : p.cooldown > 0 ? `CD:${p.cooldown}` : localAbilityActive ? 'ON' : 'USE'}
                   </button>
                </div>
             </div>
 
-            {/* Move Card */}
-            <div className={`p-5 rounded-[2rem] border transition-all ${localMoveActive ? 'bg-sky-500/10 border-sky-500/50' : 'bg-slate-900/40 border-slate-800'}`}>
-               <div className="flex justify-between items-center mb-3">
-                   <h3 className="text-xs font-black uppercase italic text-white flex items-center gap-2">
-                     <Move size={16} className="text-sky-400" /> Relocate
-                   </h3>
-                   <div className="flex items-center gap-2">
-                       {p.moveFatigue > 0 && (
-                          <div className="px-2 py-0.5 bg-red-500/20 text-red-500 text-[8px] font-black uppercase rounded-lg border border-red-500/30">
-                            Fatigue +{p.moveFatigue}
-                          </div>
-                       )}
-                       <div className="text-[9px] font-mono text-slate-400 uppercase">Cost: {1 + (p.moveFatigue || 0)} AP</div>
+            <div className="grid grid-cols-2 gap-3">
+                {/* Move Card */}
+                <button 
+                  onClick={toggleMoveMode}
+                  className={`p-4 rounded-[2rem] border transition-all text-left flex flex-col justify-between h-28 ${moveMode ? 'bg-sky-500/20 border-sky-500' : 'bg-slate-900/40 border-slate-800'}`}
+                >
+                   <div className="flex justify-between items-start w-full">
+                      <Move size={20} className={moveMode ? 'text-sky-400' : 'text-slate-600'} />
+                      {localMoveAp > 0 && <div className="text-[9px] font-mono uppercase text-sky-400 font-bold">{localMoveAp} AP</div>}
                    </div>
-               </div>
-               
-               <div className="flex gap-2">
-                  <button 
-                    onClick={() => { setLocalMoveActive(!localMoveActive); playSfx('confirm'); }}
-                    className={`flex-1 py-3 rounded-xl font-black uppercase text-[10px] transition-all border ${localMoveActive ? 'bg-sky-500 text-black border-sky-500' : 'bg-slate-800 text-slate-500 border-slate-700'}`}
-                  >
-                     {localMoveActive ? 'Moving' : 'Stationary'}
-                  </button>
-                  
-                  {localMoveActive && (
-                     <div className="flex gap-2 flex-1 animate-in slide-in-from-right duration-200">
-                        <button 
-                           onClick={() => setLocalMoveIntent(MoveIntent.CLOSE)}
-                           className={`flex-1 py-3 rounded-xl font-black uppercase text-[10px] transition-all border ${localMoveIntent === MoveIntent.CLOSE ? 'bg-sky-500/20 border-sky-500 text-sky-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}
-                        >
-                           Close In
-                        </button>
-                        <button 
-                           onClick={() => setLocalMoveIntent(MoveIntent.OPEN)}
-                           className={`flex-1 py-3 rounded-xl font-black uppercase text-[10px] transition-all border ${localMoveIntent === MoveIntent.OPEN ? 'bg-sky-500/20 border-sky-500 text-sky-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}
-                        >
-                           Retreat
-                        </button>
-                     </div>
-                  )}
-               </div>
-            </div>
+                   <div>
+                      <div className="text-xs font-black uppercase text-white italic">MANEUVER</div>
+                      {localMovePath.length > 0 ? (
+                         <div className="text-[8px] font-bold text-sky-400 uppercase mt-1 flex items-center gap-2">
+                            {localMovePath.length} Legs Plotted
+                            <span onClick={(e) => { e.stopPropagation(); handleResetMove(); }} className="p-1 bg-slate-800 rounded hover:text-white cursor-pointer"><Undo size={10}/></span>
+                         </div>
+                      ) : (
+                         <div className="text-[8px] text-slate-600 uppercase mt-1 italic">{moveMode ? 'Select Sequence' : 'Hold Position'}</div>
+                      )}
+                   </div>
+                </button>
 
-            {/* Defense Card */}
-            <div className="bg-slate-900/40 border border-slate-800 p-5 rounded-[2rem]">
-               <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-xs font-black uppercase italic text-white flex items-center gap-2">
-                     <Shield size={16} className="text-teal-500" /> Defense Matrix
-                  </h3>
-                  {p.blockFatigue > 0 && (
-                     <div className="flex items-center gap-1 text-amber-500 animate-pulse">
-                        <AlertTriangle size={12} />
-                        <span className="text-[8px] font-black uppercase">Overheat: -{Math.min(90, p.blockFatigue * 15)}% Eff</span>
-                     </div>
-                  )}
-               </div>
-               
-               <div className="flex items-center gap-4">
-                  <button 
-                     onClick={() => setLocalBlockTier(Math.max(0, localBlockTier - 1))} 
-                     disabled={localBlockTier === 0}
-                     className="h-10 w-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-slate-700 disabled:opacity-30 active:scale-95 transition-all"
-                  >
-                     <Minus size={16} />
-                  </button>
-                  <div className="flex-1 text-center">
-                     <span className={`text-xl font-black ${localBlockTier > 0 ? 'text-teal-400' : 'text-slate-600'}`}>LVL {localBlockTier}</span>
-                     <div className="text-[8px] font-mono text-slate-500 uppercase mt-1">
-                        {localBlockTier === 0 ? 'No Block' : `${calculateShield()} Shield (${blockCost} AP)`}
-                     </div>
-                  </div>
-                  <button 
-                     onClick={() => setLocalBlockTier(localBlockTier + 1)} 
-                     disabled={remainingAp < 1 || localBlockTier >= 3}
-                     className="h-10 w-10 rounded-xl bg-teal-500 flex items-center justify-center text-black hover:bg-teal-400 disabled:bg-slate-800 disabled:text-slate-500 active:scale-95 transition-all"
-                  >
-                     <Plus size={16} />
-                  </button>
-               </div>
+                {/* Defense Card */}
+                <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-[2rem] flex flex-col justify-between h-28">
+                   <div className="flex justify-between items-start">
+                      <Shield size={20} className={localBlockTier > 0 ? 'text-teal-400' : 'text-slate-600'} />
+                      {localBlockTier > 0 && <div className="text-[9px] font-mono uppercase text-slate-400">{blockCost} AP</div>}
+                   </div>
+                   <div className="flex items-center justify-between gap-2 mt-2">
+                      <button onClick={() => setLocalBlockTier(Math.max(0, localBlockTier - 1))} className="h-8 w-8 rounded-lg bg-slate-800 text-slate-400 flex items-center justify-center hover:bg-slate-700"><Minus size={14}/></button>
+                      <span className="text-xl font-black text-white">{localBlockTier}</span>
+                      <button onClick={() => setLocalBlockTier(Math.min(3, localBlockTier + 1))} className="h-8 w-8 rounded-lg bg-teal-500 text-black flex items-center justify-center hover:bg-teal-400"><Plus size={14}/></button>
+                   </div>
+                   <div className="text-[8px] font-mono text-slate-500 uppercase text-center">{localBlockTier > 0 ? `${calculateShield()} Shield` : 'No Defense'}</div>
+                </div>
             </div>
 
             {/* Offense Card */}
-            <div className="bg-slate-900/40 border border-slate-800 p-5 rounded-[2rem] space-y-4">
+            <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-[2rem] space-y-3">
                <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-black uppercase italic text-white flex items-center gap-2">
-                     <Skull size={16} className="text-red-500" /> Weapon Systems
-                  </h3>
+                  <div className="flex items-center gap-2">
+                     <Skull size={20} className={localAttackTier > 0 ? 'text-red-500' : 'text-slate-600'} />
+                     <span className="text-xs font-black uppercase text-white italic">WEAPON SYSTEMS</span>
+                  </div>
+                  {localAttackTier > 0 && <div className="text-[9px] font-mono uppercase text-slate-400">{attackCost} AP</div>}
                </div>
                
                <div className="flex items-center gap-4">
-                  <button 
-                     onClick={() => setLocalAttackTier(Math.max(0, localAttackTier - 1))} 
-                     disabled={localAttackTier === 0}
-                     className="h-10 w-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:bg-slate-700 disabled:opacity-30 active:scale-95 transition-all"
-                  >
-                     <Minus size={16} />
-                  </button>
-                  <div className="flex-1 text-center">
+                  <button onClick={() => setLocalAttackTier(Math.max(0, localAttackTier - 1))} className="h-10 w-12 rounded-xl bg-slate-800 text-slate-400 flex items-center justify-center hover:bg-slate-700"><Minus size={16}/></button>
+                  <div className="flex-1 text-center bg-black/20 rounded-xl py-2">
                      <span className={`text-xl font-black ${localAttackTier > 0 ? 'text-red-500' : 'text-slate-600'}`}>LVL {localAttackTier}</span>
-                     <div className="text-[8px] font-mono text-slate-500 uppercase mt-1">
-                        {localAttackTier === 0 ? 'No Attack' : `${attackCost} AP cost`}
-                     </div>
+                     <div className="text-[8px] font-mono text-slate-500 uppercase mt-0.5">{attackConfig?.mult || 0}x DMG</div>
                   </div>
-                  <button 
-                     onClick={() => setLocalAttackTier(localAttackTier + 1)} 
-                     disabled={remainingAp < 1 || localAttackTier >= 3}
-                     className="h-10 w-10 rounded-xl bg-red-500 flex items-center justify-center text-white hover:bg-red-400 disabled:bg-slate-800 disabled:text-slate-500 active:scale-95 transition-all"
-                  >
-                     <Plus size={16} />
-                  </button>
+                  <button onClick={() => setLocalAttackTier(Math.min(3, localAttackTier + 1))} className="h-10 w-12 rounded-xl bg-red-500 text-white flex items-center justify-center hover:bg-red-400"><Plus size={16}/></button>
                </div>
-               
+
                {/* Target Selector */}
                {localAttackTier > 0 && (
-                  <div className="space-y-2 pt-2 border-t border-slate-800/50">
-                     <div className="text-[8px] font-mono text-slate-500 uppercase tracking-widest mb-2">Select Primary Target</div>
-                     {otherPlayers.map((t: any) => (
-                        <button key={t.id} onClick={() => setLocalTargetId(t.id)} className={`w-full p-3 rounded-xl border flex justify-between items-center transition-all ${localTargetId === t.id ? 'bg-red-500/10 border-red-500/50' : 'bg-black/20 border-slate-800'}`}>
-                           <div className="flex items-center gap-3">
-                              <div className={`w-2 h-2 rounded-full ${localTargetId === t.id ? 'bg-red-500 animate-pulse' : 'bg-slate-700'}`}></div>
-                              <div className="text-left">
-                                 <div className="text-[10px] font-black uppercase text-white">{t.name}</div>
-                                 <div className="text-[8px] font-mono text-slate-500">PROJ: {calculateProjectedDmg(t)} DMG</div>
-                              </div>
-                           </div>
-                           <ChevronRight size={14} className={localTargetId === t.id ? 'text-red-500' : 'text-slate-700'} />
-                        </button>
-                     ))}
+                  <div className="flex gap-2 overflow-x-auto pb-2">
+                     {otherPlayers.map((t: any) => {
+                        const dmg = calculateProjectedDmg(t);
+                        const isValid = dmg > 0;
+                        return (
+                           <button 
+                              key={t.id} 
+                              onClick={() => {
+                                 if(isValid) {
+                                    setLocalTargetId(t.id);
+                                    playSfx('confirm');
+                                 } else {
+                                    playSfx('cancel');
+                                 }
+                              }} 
+                              className={`flex-1 min-w-[100px] p-3 rounded-xl border transition-all text-left relative overflow-hidden ${!isValid ? 'opacity-50 border-slate-900 bg-slate-950 cursor-not-allowed' : localTargetId === t.id ? 'bg-red-500/10 border-red-500/50' : 'bg-black/20 border-slate-800'}`}
+                           >
+                              <div className="text-[9px] font-black uppercase text-white truncate relative z-10">{t.name}</div>
+                              <div className={`text-[8px] font-mono mt-1 relative z-10 ${isValid ? 'text-slate-500' : 'text-red-500 font-bold'}`}>{isValid ? `~${dmg} DMG` : 'BLOCKED'}</div>
+                              {localTargetId === t.id && isValid && <div className="absolute top-1 right-1"><Target size={10} className="text-red-500 animate-pulse"/></div>}
+                           </button>
+                        );
+                     })}
                   </div>
                )}
             </div>
          </div>
 
          {/* Sticky Footer Button */}
-         <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#0a0f1e] via-[#0a0f1e] to-transparent z-30">
+         <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#0a0f1e] via-[#0a0f1e] to-transparent z-30">
             <Button 
-               variant={remainingAp >= 0 ? (totalSpent === 0 ? 'amber' : 'primary') : 'secondary'} 
-               size="lg" className="w-full py-5 text-lg shadow-2xl"
+               variant={remainingAp >= 0 ? (totalSpent === 0 ? 'amber' : isAttackValid ? 'primary' : 'secondary') : 'secondary'} 
+               size="lg" className="w-full py-4 text-lg shadow-2xl"
                onClick={() => {
-                 if (tutorial.isActive && tutorial.step === 4) {
-                   game.setTutorial((prev: any) => ({ ...prev, step: 5 }));
-                 }
+                 // Use the final point in the path as the destination for legacy compatibility
+                 const finalMoveDest = localMovePath.length > 0 ? localMovePath[localMovePath.length - 1] : undefined;
+                 
                  submitAction({ 
                     blockAp: localBlockTier, 
                     attackAp: localAttackTier, 
-                    moveAp: localMoveActive ? 1 : 0,
+                    moveAp: localMoveAp,
+                    movePath: localMovePath, // Submit the whole path
                     abilityActive: localAbilityActive,
                     targetId: localTargetId,
-                    moveIntent: localMoveIntent
+                    moveDest: finalMoveDest
                  });
                }}
-               disabled={remainingAp < 0 || ((localAttackTier > 0 || localMoveActive) && !localTargetId)}
+               disabled={remainingAp < 0 || (moveMode && localMovePath.length === 0) || !isAttackValid}
             >
-               {remainingAp < 0 ? 'INSUFFICIENT AP' : totalSpent === 0 ? 'COMMAND_RESERVE' : 'EXECUTE_STRIKE'}
+               {remainingAp < 0 ? 'OVER_BUDGET' : moveMode && localMovePath.length === 0 ? 'PLOT_COURSE' : !isAttackValid ? 'NO_VALID_TARGET' : 'EXECUTE'}
             </Button>
          </div>
       </div>
-
-      {renderTutorialOverlay()}
     </ScreenWrapper>
   );
 };

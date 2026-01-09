@@ -18,7 +18,7 @@ export function useProgression() {
     PersistenceService.load('protocol_xp', 0)
   );
   const [unlockedUnits, setUnlockedUnits] = useState<UnitType[]>(() => 
-    PersistenceService.load('protocol_unlocks', [UnitType.GHOST, UnitType.AEGIS, UnitType.REAPER])
+    PersistenceService.load('protocol_unlocks', [UnitType.GHOST])
   );
   const [highestLevelReached, setHighestLevelReached] = useState<number>(() => 
     PersistenceService.load('protocol_progression', 1)
@@ -66,6 +66,26 @@ export function useProgression() {
     }));
   };
 
+  const unlockAll = () => {
+    setCredits(99999);
+    setXp(99999);
+    setUnlockedUnits(Object.values(UnitType));
+    setHighestLevelReached(99);
+    setHasCompletedTutorial(true);
+    setHasSeenIntro(true);
+  };
+
+  const resetProgress = () => {
+    setCredits(0);
+    setXp(0);
+    setUnlockedUnits([UnitType.GHOST]);
+    setHighestLevelReached(1);
+    setHasCompletedTutorial(false);
+    setHasSeenIntro(false);
+    setStats({ wins: 0, losses: 0, totalGames: 0 });
+    localStorage.clear(); // Hard reset
+  };
+
   return {
     credits, setCredits,
     xp, setXp,
@@ -75,6 +95,8 @@ export function useProgression() {
     hasSeenIntro, setHasSeenIntro,
     stats, setStats, updateStats,
     purchaseUnit,
+    unlockAll,
+    resetProgress,
     cipheredUnits: [UnitType.GHOST, UnitType.AEGIS, UnitType.REAPER], 
     getMastery: (t: UnitType) => 1,
   };

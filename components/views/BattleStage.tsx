@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Player, UnitType } from '../../types';
-import { Shield, Skull, Zap, Ghost } from 'lucide-react';
+import { Shield, Skull, Zap, Ghost, AlertOctagon } from 'lucide-react';
 
 interface BattleStageProps {
   leftPlayer: Player | null;
@@ -21,6 +21,8 @@ const UnitDisplay: React.FC<{
   animation: 'idle' | 'attack' | 'hit' | 'faint';
 }> = ({ player, isRightSide = false, animation }) => {
   if (!player.unit) return null;
+
+  const isCritical = player.hp < (player.maxHp * 0.15) && !player.desperationUsed;
 
   const getAnimClass = () => {
     switch (animation) {
@@ -58,6 +60,13 @@ const UnitDisplay: React.FC<{
              <span className="text-[8px] font-bold text-amber-500 animate-pulse">STATUS</span>
            )}
         </div>
+        
+        {/* Critical Warning */}
+        {isCritical && (
+           <div className="mt-2 bg-red-600 text-white text-[8px] font-black uppercase py-1 px-2 rounded flex items-center justify-center gap-1 animate-pulse">
+              <AlertOctagon size={10} /> CRITICAL // SURGE IMMINENT
+           </div>
+        )}
       </div>
 
       {/* Sprite / Unit */}
@@ -70,6 +79,7 @@ const UnitDisplay: React.FC<{
                   className={`w-48 h-48 sm:w-64 sm:h-64 object-contain filter drop-shadow-[0_10px_20px_rgba(0,0,0,0.6)] transition-all
                     ${isRightSide ? 'scale-x-[-1]' : ''} 
                     ${animation === 'hit' ? 'brightness-150' : ''}
+                    ${isCritical ? 'animate-glitch' : ''}
                   `}
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
@@ -125,8 +135,10 @@ export const BattleStage: React.FC<BattleStageProps> = ({ leftPlayer, rightPlaye
              <div className="absolute bottom-[35%] left-4 z-20 scale-110 origin-bottom-left transition-all duration-500">
                {leftPlayer && <UnitDisplay player={leftPlayer} animation={animState.left} />}
              </div>
+             
+             {/* Key Change: Right player container allows swapping */}
              <div className="absolute top-[15%] right-4 z-10 scale-90 origin-top-right transition-all duration-500">
-               {rightPlayer && <UnitDisplay player={rightPlayer} isRightSide animation={animState.right} />}
+               {rightPlayer && <UnitDisplay key={rightPlayer.id} player={rightPlayer} isRightSide animation={animState.right} />}
              </div>
            </>
          )}

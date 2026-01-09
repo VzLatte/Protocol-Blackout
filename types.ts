@@ -1,4 +1,5 @@
 
+
 export enum GameMode {
   TACTICAL = 'TACTICAL',
   CHAOS = 'CHAOS'
@@ -99,6 +100,27 @@ export enum WinCondition {
   RESOURCE_HOLD = 'RESOURCE_HOLD',
 }
 
+// --- GRID TYPES ---
+export enum TileType {
+  EMPTY = 0,
+  OBSTACLE = 1,     // Blocks movement and LOS
+  HIGH_GROUND = 2,  // Cost 2 Move Points, +0.1 Focus
+  TOXIC = 3,        // Cost 2 Move Points, No bonus
+  THRESHOLD = 4     // Capture point. +Risk/+Reward. Win cond.
+}
+
+export interface Position {
+  x: number;
+  y: number;
+}
+
+export interface GridMap {
+  id: string;
+  name: string;
+  tiles: TileType[][]; // 7x7 grid
+}
+// ------------------
+
 export interface CampaignLevel {
   id: string;
   chapter: number;
@@ -136,13 +158,15 @@ export interface Unit {
   maxHp: number;
   speed: number;
   focus: number;
-  atkStat: number; // Replaces dmgMultiplier
-  defStat: number; // New stat for Shield scaling
+  range: number; // New Range Stat
+  atkStat: number; 
+  defStat: number; 
   passiveDesc: string;
   activeDesc: string;
   cooldownMax: number; 
   truth: string;
   image?: string;
+  minTierToPierceWalls?: number; // AI Logic extensibility
 }
 
 export interface AIConfig {
@@ -157,19 +181,22 @@ export interface Player {
   hp: number;
   maxHp: number;
   ap: number;
-  moveFatigue: number; // Tracks consecutive moves for cost scaling
-  blockFatigue: number; // "Overheat" - Tracks consecutive blocks
+  position: Position; // New: Grid Position
+  moveFatigue: number; // Deprecated but kept for type safety in legacy logs
+  blockFatigue: number; 
   isEliminated: boolean;
   isAI: boolean;
   aiConfig?: AIConfig;
   totalReservedAp: number;
   cooldown: number;
   activeUsed: boolean;
+  desperationUsed: boolean; 
   statuses: StatusEffect[];
   isAbilityActive: boolean;
   targetLockId?: string;
   overclockTurns?: number;
   isBoss?: boolean;
+  captureTurns: number; // New: Track consecutive turns on threshold
 }
 
 export enum ActionType {
@@ -179,16 +206,22 @@ export enum ActionType {
   RESERVE = 'RESERVE',
   PHASE = 'PHASE',
   ABILITY = 'ABILITY',
-  BOUNTY = 'BOUNTY'
+  BOUNTY = 'BOUNTY',
+  DESPERATION = 'DESPERATION',
+  COLLISION = 'COLLISION',
+  CAPTURE = 'CAPTURE'
 }
 
 export interface Action {
   blockAp: number; // 0-3
   attackAp: number; // 0-3
-  moveAp: number; // 0 or 1 (cost calculated based on fatigue)
+  moveAp: number; // AP Spent on movement
+  movePath?: Position[]; // New: List of steps taken
   abilityActive: boolean;
+  isDesperation?: boolean;
   targetId?: string;
-  moveIntent?: MoveIntent;
+  moveDest?: Position; // Legacy/End Point
+  moveIntent?: MoveIntent; // Legacy
 }
 
 export interface TurnData {
@@ -207,8 +240,9 @@ export interface ResolutionLog {
   shield?: number; 
   apSpent?: number;
   resultMessage: string;
+  mathDetails?: string; 
   isElimination?: boolean;
-  isCracked?: boolean; // Used for "Chip Damage" or Overheat break
+  isCracked?: boolean; 
   mitigationPercent?: number;
   defenseTier?: number;
   rangeChange?: string;

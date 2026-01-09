@@ -1,7 +1,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
-import { Player, TurnData, ResolutionLog, Phase, GameMode, Action, DifficultyLevel, HazardType, Unit, UnitType } from '../types';
-import { INITIAL_HP } from '../constants';
+import { Player, TurnData, ResolutionLog, Phase, GameMode, Action, DifficultyLevel, HazardType, Unit, UnitType, GridMap } from '../types';
+import { INITIAL_HP, MAPS } from '../constants';
 import { resolveCombat } from '../combatEngine';
 import { UNITS } from '../operativeRegistry';
 
@@ -15,11 +15,11 @@ export function useBattleEngine() {
   const [currentTurnSubmissions, setCurrentTurnSubmissions] = useState<TurnData[]>([]);
   const [fullHistory, setFullHistory] = useState<TurnData[][]>([]);
   const [resolutionLogs, setResolutionLogs] = useState<ResolutionLog[]>([]);
-  const [distanceMatrix, setDistanceMatrix] = useState<Map<string, number>>(new Map());
   const [victoryReason, setVictoryReason] = useState<string | null>(null);
   const [activeChaosEvent, setActiveChaosEvent] = useState<{name: string, description: string} | null>(null);
   const [fogOfWarActive, setFogOfWarActive] = useState(0);
   const [phaseTransition, setPhaseTransition] = useState<string | null>(null);
+  const [activeMap, setActiveMap] = useState<GridMap>(MAPS[1]);
 
   // Auto-advance AI during PASS_PHONE phase
   useEffect(() => {
@@ -28,21 +28,19 @@ export function useBattleEngine() {
       if (activePlayer?.isAI) {
         const timer = setTimeout(() => {
           setPhase(Phase.TURN_ENTRY);
-        }, 800); // Small delay to let the "Processing Logic" UI be seen briefly
+        }, 800); 
         return () => clearTimeout(timer);
       }
     }
   }, [phase, players, currentPlayerIdx]);
 
   const initDistances = (pList: Player[]) => {
-    const newMatrix = new Map<string, number>();
-    for (let i = 0; i < pList.length; i++) {
-      for (let j = i + 1; j < pList.length; j++) {
-         const key = [pList[i].id, pList[j].id].sort().join('-');
-         newMatrix.set(key, 1);
-      }
-    }
-    setDistanceMatrix(newMatrix);
+    // Legacy support: Initialize positions if missing
+    pList.forEach((p, idx) => {
+        if (!p.position) {
+            p.position = idx === 0 ? { x: 0, y: 3 } : { x: 6, y: 3 };
+        }
+    });
   };
 
   const selectUnit = (type: UnitType) => {
@@ -92,11 +90,11 @@ export function useBattleEngine() {
     hazard: HazardType,
     levelId: string | null
   ) => {
-    const result = resolveCombat(players, submissions, round, maxRounds, mode, activeChaosEvent, distanceMatrix, difficulty, hazard);
+    // Pass activeMap to resolution engine
+    const result = resolveCombat(players, submissions, round, maxRounds, mode, activeChaosEvent, new Map(), difficulty, hazard, activeMap);
     
     setPlayers(result.nextPlayers);
     setResolutionLogs(result.logs);
-    setDistanceMatrix(result.nextDistanceMatrix);
     setFullHistory(prev => [...prev, submissions]);
     setPhase(Phase.RESOLUTION);
     setRound(result.nextRound);
@@ -124,8 +122,8 @@ export function useBattleEngine() {
     setFullHistory([]);
     setActiveChaosEvent(null);
     setFogOfWarActive(0);
-    setDistanceMatrix(new Map());
     setVictoryReason(null);
+    setActiveMap(MAPS[1]); // Reset to default map
   };
 
   return {
@@ -138,11 +136,11 @@ export function useBattleEngine() {
     currentTurnSubmissions, setCurrentTurnSubmissions,
     fullHistory, setFullHistory,
     resolutionLogs, setResolutionLogs,
-    distanceMatrix, setDistanceMatrix,
     victoryReason, setVictoryReason,
     activeChaosEvent, setActiveChaosEvent,
     fogOfWarActive, setFogOfWarActive,
     phaseTransition, setPhaseTransition,
+    activeMap, setActiveMap, // Export map state
     initDistances,
     selectUnit,
     submitTurnAction,

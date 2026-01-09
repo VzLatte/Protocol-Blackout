@@ -65,7 +65,7 @@ export function useGameState() {
                  // Recalculate AI move with knowledge of player moves
                  try {
                    const cheatMove = calculateAIMove(
-                     p, battle.players, battle.fullHistory, battle.round, campaign.currentChapter, campaign.campaignDifficulty, completeSubmissions
+                     p, battle.players, battle.fullHistory, battle.round, campaign.currentChapter, campaign.campaignDifficulty, battle.activeMap, completeSubmissions
                    );
                    sub.action = cheatMove;
                  } catch(e) { console.error("Cheat calc failed", e); }
@@ -138,8 +138,11 @@ export function useGameState() {
       totalReservedAp: 0,
       cooldown: 0,
       activeUsed: false,
+      desperationUsed: false,
       statuses: [],
-      isAbilityActive: false
+      isAbilityActive: false,
+      position: { x: idx === 0 ? 0 : 6, y: 3 },
+      captureTurns: 0
     }));
 
     battle.setPlayers(newPlayers);
@@ -170,6 +173,21 @@ export function useGameState() {
       n[i] = { ...n[i], ...u };
       return n;
     });
+  };
+
+  const usePromoCode = (code: string) => {
+    if (code === "TEST_UNLOCK") {
+      progression.unlockAll();
+      playSfx('success');
+      return "DEV_ACCESS_GRANTED";
+    }
+    if (code === "TEST_RESET") {
+      progression.resetProgress();
+      playSfx('danger');
+      return "SYSTEM_FACTORY_RESET";
+    }
+    playSfx('cancel');
+    return "INVALID_KEY";
   };
 
   // --- Public Interface ---
@@ -204,8 +222,6 @@ export function useGameState() {
     nextTurn,
     startGame,
     submitAction,
-    
-    // Legacy/Helper
-    usePromoCode: (code: string) => "KEY_RECOGNIZED",
+    usePromoCode
   };
 }

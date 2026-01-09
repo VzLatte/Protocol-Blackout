@@ -83,6 +83,7 @@ export function useAIController(
             battle.round, 
             currentChapter, 
             campaignDifficulty,
+            battle.activeMap,
             battle.currentTurnSubmissions
           );
         } else {
@@ -92,7 +93,8 @@ export function useAIController(
             battle.fullHistory, 
             battle.round, 
             currentChapter, 
-            campaignDifficulty
+            campaignDifficulty,
+            battle.activeMap
           );
         }
 

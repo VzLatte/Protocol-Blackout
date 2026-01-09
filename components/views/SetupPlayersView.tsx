@@ -3,8 +3,9 @@ import React from 'react';
 import { ScreenWrapper } from '../layout/ScreenWrapper';
 import { GlobalHeader } from '../layout/GlobalHeader';
 import { Button } from '../ui/Button';
-import { Edit2, Check, X, User, Cpu, Shield, Zap, Target, Clock, Activity } from 'lucide-react';
+import { Edit2, Check, X, User, Cpu, Shield, Zap, Target, Clock, Activity, Map } from 'lucide-react';
 import { Phase, AIArchetype, AIDifficulty } from '../../types';
+import { MAPS } from '../../constants';
 
 interface SetupPlayersViewProps {
   game: any;
@@ -68,6 +69,22 @@ export const SetupPlayersView: React.FC<SetupPlayersViewProps> = ({ game }) => {
                           </div>
                        </div>
                     </div>
+                  </div>
+
+                  {/* Map Selection */}
+                  <div>
+                     <label className="text-[10px] uppercase font-mono text-slate-500 mb-2 block tracking-widest flex items-center gap-2"><Map size={12}/> Tactical Environment</label>
+                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {Object.values(MAPS).map((m: any) => (
+                           <button
+                              key={m.id}
+                              onClick={() => { game.setActiveMap(m); playSfx('beep'); }}
+                              className={`p-3 rounded-xl border flex items-center justify-center gap-2 transition-all ${game.activeMap.id === m.id ? 'bg-teal-500/20 border-teal-500 text-teal-400' : 'bg-slate-800/50 border-slate-800 text-slate-500 hover:border-slate-700'}`}
+                           >
+                              <span className="text-[8px] font-black uppercase">{m.name.replace('_', ' ')}</span>
+                           </button>
+                        ))}
+                     </div>
                   </div>
                </div>
 

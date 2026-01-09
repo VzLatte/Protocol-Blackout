@@ -3,10 +3,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ScreenWrapper } from '../layout/ScreenWrapper';
 import { GlobalHeader } from '../layout/GlobalHeader';
 import { Button } from '../ui/Button';
-import { Skull, Shield, Zap, TrendingUp, Cpu, Move, Activity, Ghost, Crosshair, Droplets, Flame, ShieldAlert, Eye, EyeOff, ChevronUp, Info } from 'lucide-react';
+import { Skull, Shield, Zap, TrendingUp, Cpu, Move, Activity, Ghost, Crosshair, Droplets, Flame, ShieldAlert, Eye, EyeOff, ChevronUp, Info, Calculator, AlertOctagon, Map as MapIcon, ChevronLeft, ChevronRight, Target } from 'lucide-react';
 import { ActionType, Phase, UnitType } from '../../types';
 import { DefenseDisplay } from './DefenseDisplay';
 import { BattleStage } from './BattleStage';
+import { TacticalGrid } from '../tactical/TacticalGrid';
+import { THRESHOLD_WIN_TURNS } from '../../constants';
 
 interface ResolutionViewProps {
   game: any;
@@ -16,8 +18,10 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({ game }) => {
   const { resolutionLogs, round, nextTurn, visualLevel, credits, phaseTransition, tutorial, setTutorial } = game;
   const [visibleCount, setVisibleCount] = useState(0);
   const [isDone, setIsDone] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(800); // Slower for animation clarity
-  
+  const [playbackSpeed, setPlaybackSpeed] = useState(800); 
+  const [showMap, setShowMap] = useState(false); // Toggle state
+  const [activeEnemyIndex, setActiveEnemyIndex] = useState(0); // For multi-enemy viewing
+
   // Sheet State
   const [isSheetExpanded, setIsSheetExpanded] = useState(false);
   const touchStartY = useRef(0);
@@ -28,71 +32,52 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({ game }) => {
   const [stageRightId, setStageRightId] = useState<string | null>(null);
   const [animState, setAnimState] = useState<{left: 'idle'|'attack'|'hit'|'faint', right: 'idle'|'attack'|'hit'|'faint'}>({ left: 'idle', right: 'idle' });
 
-  // Initialize stage with main player (Human) on Left and first enemy on Right
-  useEffect(() => {
-    const human = game.players.find((p: any) => !p.isAI);
-    const enemy = game.players.find((p: any) => p.isAI && !p.isEliminated) || game.players.find((p: any) => p.isAI);
-    setStageLeftId(human?.id || game.players[0].id);
-    setStageRightId(enemy?.id || game.players[1].id);
-  }, []);
+  // Filter enemies
+  const enemies = game.players.filter((p: any) => p.isAI || p.id !== game.players[0].id);
+  const activeEnemy = enemies[activeEnemyIndex] || enemies[0];
+  const humanPlayer = game.players.find((p: any) => !p.isAI) || game.players[0];
 
-  // --- Logic: Automated Playback & Animation Sync ---
+  useEffect(() => {
+    setStageLeftId(humanPlayer.id);
+    setStageRightId(activeEnemy?.id);
+  }, [activeEnemyIndex]);
+
   useEffect(() => {
     if (visibleCount < resolutionLogs.length) {
       const timer = setTimeout(() => {
         const log = resolutionLogs[visibleCount];
-        
-        // 1. Determine who is on stage
-        const currentLeft = stageLeftId;
-        const currentRight = stageRightId;
-        
-        let newLeft = currentLeft;
-        let newRight = currentRight;
         const actorId = log.attackerId;
         const targetId = log.targetId;
 
-        // Ensure participants are visible
-        const humanId = game.players.find((p: any) => !p.isAI)?.id;
-        
-        if (actorId === humanId) newLeft = humanId;
-        else if (targetId === humanId) newLeft = humanId;
-        else if (actorId !== currentLeft && actorId !== currentRight) {
-             if (currentLeft === humanId) newRight = actorId; 
-             else newLeft = actorId;
+        // Auto-switch view to relevant actors
+        if (actorId && actorId !== humanPlayer.id) {
+           const idx = enemies.findIndex((e: any) => e.id === actorId);
+           if (idx !== -1) setActiveEnemyIndex(idx);
+        } else if (targetId && targetId !== humanPlayer.id) {
+           const idx = enemies.findIndex((e: any) => e.id === targetId);
+           if (idx !== -1) setActiveEnemyIndex(idx);
         }
 
-        if (targetId && targetId !== newLeft && targetId !== newRight) {
-             if (newLeft === actorId) newRight = targetId;
-             else newLeft = targetId;
-        }
-
-        // Apply swaps
-        setStageLeftId(newLeft);
-        setStageRightId(newRight);
-
-        // 2. Trigger Animations
         let nextAnim = { left: 'idle', right: 'idle' } as any;
 
         if (log.type === ActionType.ATTACK) {
-             if (actorId === newLeft) nextAnim.left = 'attack';
-             if (actorId === newRight) nextAnim.right = 'attack';
+             if (actorId === humanPlayer.id) nextAnim.left = 'attack';
+             if (actorId === activeEnemy.id) nextAnim.right = 'attack';
              
              if (targetId && log.damage > 0) {
-                 if (targetId === newLeft) nextAnim.left = 'hit';
-                 if (targetId === newRight) nextAnim.right = 'hit';
+                 if (targetId === humanPlayer.id) nextAnim.left = 'hit';
+                 if (targetId === activeEnemy.id) nextAnim.right = 'hit';
              }
         }
         
-        // Fainting check
         const targetPlayer = game.players.find((p:any) => p.id === targetId);
         if (targetPlayer && targetPlayer.hp <= 0) {
-            if (targetId === newLeft) nextAnim.left = 'faint';
-            if (targetId === newRight) nextAnim.right = 'faint';
+            if (targetId === humanPlayer.id) nextAnim.left = 'faint';
+            if (targetId === activeEnemy.id) nextAnim.right = 'faint';
         }
 
         setAnimState(nextAnim);
 
-        // Reset animation after short delay
         setTimeout(() => {
              setAnimState(prev => {
                 const l = prev.left === 'faint' ? 'faint' : 'idle';
@@ -107,22 +92,19 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({ game }) => {
       return () => clearTimeout(timer);
     } else {
       setIsDone(true);
-      // Trigger Tutorial Step 6 if active and in C1-L1
       if (tutorial.isActive && tutorial.step === 5 && game.currentCampaignLevelId === 'C1-L1') {
          setTutorial((prev: any) => ({ ...prev, step: 6 }));
          setIsSheetExpanded(true);
       }
     }
-  }, [visibleCount, resolutionLogs, playbackSpeed, stageLeftId, stageRightId, game.players, tutorial.isActive, tutorial.step, game.currentCampaignLevelId]);
+  }, [visibleCount, resolutionLogs, playbackSpeed, activeEnemy, enemies, humanPlayer.id, tutorial.isActive]);
 
-  // Auto-scroll when logs update, but only if sheet is expanded or user isn't holding it
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [visibleCount]);
 
-  // Swipe Handlers
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY;
   };
@@ -130,14 +112,13 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({ game }) => {
   const handleTouchEnd = (e: React.TouchEvent) => {
     const deltaY = touchStartY.current - e.changedTouches[0].clientY;
     if (Math.abs(deltaY) > 50) {
-      if (deltaY > 0) setIsSheetExpanded(true); // Swipe Up
-      else setIsSheetExpanded(false); // Swipe Down
+      if (deltaY > 0) setIsSheetExpanded(true);
+      else setIsSheetExpanded(false); 
     }
   };
 
   const getPlayerName = (id?: string) => game.players.find((p: any) => p.id === id)?.name || "SYSTEM";
 
-  // Helpers for Log Rendering
   const getOperativeFX = (unitType: string, isAbility: boolean) => {
     const base = "border-slate-800 bg-slate-900/60";
     if (!unitType) return base;
@@ -163,8 +144,13 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({ game }) => {
     }
   };
 
-  const leftPlayer = game.players.find((p:any) => p.id === stageLeftId) || null;
-  const rightPlayer = game.players.find((p:any) => p.id === stageRightId) || null;
+  const cycleEnemy = (dir: number) => {
+      let next = activeEnemyIndex + dir;
+      if (next < 0) next = enemies.length - 1;
+      if (next >= enemies.length) next = 0;
+      setActiveEnemyIndex(next);
+      if (game.playSfx) game.playSfx('confirm');
+  };
 
   return (
     <ScreenWrapper visualLevel={visualLevel} noScroll centerContent={false}>
@@ -176,8 +162,15 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({ game }) => {
         credits={credits} 
       />
       
-      {/* Speed Controls (Floating) */}
-      <div className="fixed top-24 right-6 z-30">
+      {/* Speed Controls & Map Toggle (Floating) */}
+      <div className="fixed top-24 right-4 z-30 flex flex-col gap-2 items-end">
+        <button 
+          onClick={() => setShowMap(!showMap)}
+          className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase flex items-center gap-2 border shadow-lg transition-all ${showMap ? 'bg-sky-500 text-black border-sky-400' : 'bg-black/80 border-slate-700 text-slate-400'}`}
+        >
+          <MapIcon size={14} /> {showMap ? 'HIDE MAP' : 'VIEW MAP'}
+        </button>
+        
         {!isDone && (
           <button 
             onClick={() => setPlaybackSpeed(100)}
@@ -188,15 +181,54 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({ game }) => {
         )}
       </div>
 
-      {/* Battle Visual Stage (Perspective Mode) */}
+      {/* Capture Progress Overlay */}
+      {humanPlayer.captureTurns > 0 && (
+         <div className="fixed top-24 left-4 z-30 bg-black/80 border border-amber-500/50 p-3 rounded-xl flex items-center gap-3">
+             <Target size={16} className="text-amber-500 animate-pulse"/>
+             <div>
+                <div className="text-[8px] font-black uppercase text-amber-500">Capture Protocol</div>
+                <div className="flex gap-1 mt-1">
+                   {[...Array(THRESHOLD_WIN_TURNS)].map((_, i) => (
+                      <div key={i} className={`w-3 h-1 rounded-sm ${i < humanPlayer.captureTurns ? 'bg-amber-500' : 'bg-slate-700'}`}></div>
+                   ))}
+                </div>
+             </div>
+         </div>
+      )}
+
+      {/* Main Visual Layer */}
       <div className="absolute inset-0 top-0 z-0">
-        <BattleStage 
-          leftPlayer={leftPlayer} 
-          rightPlayer={rightPlayer} 
-          animState={animState}
-          variant="perspective"
-          className="w-full h-full"
-        />
+        {showMap ? (
+           <div className="w-full h-full flex flex-col items-center justify-center bg-[#050b14] pt-20 pb-40">
+              <TacticalGrid 
+                 map={game.activeMap}
+                 players={game.players}
+                 currentPlayerId={stageLeftId || ""}
+                 reachableTiles={[]}
+                 onTileClick={() => {}}
+              />
+              <div className="text-[9px] font-mono text-slate-500 mt-4 uppercase animate-pulse">Live Tactical Feed</div>
+           </div>
+        ) : (
+           <div className="w-full h-full relative">
+              <BattleStage 
+                leftPlayer={humanPlayer} 
+                rightPlayer={activeEnemy} 
+                animState={animState}
+                variant="perspective"
+                className="w-full h-full"
+              />
+              
+              {/* Multi-Enemy Controls */}
+              {enemies.length > 1 && (
+                  <div className="absolute top-[20%] right-4 z-40 flex flex-col items-center gap-2">
+                     <button onClick={() => cycleEnemy(-1)} className="p-2 bg-slate-900/80 border border-slate-700 rounded-lg hover:bg-slate-800 text-slate-400"><ChevronLeft size={16}/></button>
+                     <span className="text-[8px] font-mono text-slate-500 bg-black/50 px-2 py-1 rounded">{activeEnemyIndex+1}/{enemies.length}</span>
+                     <button onClick={() => cycleEnemy(1)} className="p-2 bg-slate-900/80 border border-slate-700 rounded-lg hover:bg-slate-800 text-slate-400"><ChevronRight size={16}/></button>
+                  </div>
+              )}
+           </div>
+        )}
       </div>
 
       {/* SWIPEABLE LOG SHEET */}
@@ -243,24 +275,35 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({ game }) => {
                   const isBlock = log.type === ActionType.BLOCK || log.type === ActionType.PHASE;
                   const isAttack = log.type === ActionType.ATTACK;
                   const isMove = log.type === ActionType.MOVE;
+                  const isDesperation = log.type === ActionType.DESPERATION;
+                  const isCollision = log.type === ActionType.COLLISION;
+                  const isCapture = log.type === ActionType.CAPTURE;
                   
                   const operativeFX = getOperativeFX(unitType, isAbility);
-                  const isCritical = log.damage > 400 || log.resultMessage?.includes("LETHAL");
+                  const isCritical = log.damage > 400 || log.resultMessage?.includes("LETHAL") || isDesperation;
 
                   return (
                     <div 
                       key={i} 
                       className={`border p-3 rounded-2xl flex flex-col gap-2 animate-in slide-in-from-bottom-2 duration-200 relative overflow-hidden transition-all
                         ${operativeFX}
-                        ${isCritical ? 'ring-2 ring-red-500/40' : ''}`}
+                        ${isCritical ? 'ring-2 ring-red-500/40' : ''}
+                        ${isDesperation ? 'bg-red-950/40 border-red-500/60' : ''}
+                        ${isCollision ? 'bg-amber-950/40 border-amber-500/60' : ''}`}
                     >
                        <div className="flex items-center gap-3 relative z-10">
                            <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border transition-all
                               ${isBlock ? 'bg-teal-500/10 text-teal-400 border-teal-500/30' : 
                                 isAttack ? 'bg-red-500/10 text-red-500 border-red-500/30' : 
                                 isMove ? 'bg-sky-500/10 text-sky-400 border-sky-500/30' :
+                                isDesperation ? 'bg-red-600 text-white animate-pulse' :
+                                isCollision ? 'bg-amber-500 text-black' :
+                                isCapture ? 'bg-amber-500/20 text-amber-500 border-amber-500' :
                                 'bg-amber-500/10 text-amber-500 border-amber-500/30'}`}>
-                              {getOperativeIcon(unitType, isBlock ? <Shield size={16} /> : isAttack ? <Skull size={16} /> : <Zap size={16} />)}
+                              {isDesperation ? <AlertOctagon size={20} /> : 
+                               isCollision ? <AlertOctagon size={20} /> :
+                               isCapture ? <Target size={20} /> :
+                               getOperativeIcon(unitType, isBlock ? <Shield size={16} /> : isAttack ? <Skull size={16} /> : <Zap size={16} />)}
                            </div>
 
                            <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -270,19 +313,19 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({ game }) => {
                                    {log.targetName && <span className="text-slate-500 font-mono text-[8px]">➔ {log.targetName}</span>}
                                  </div>
                                  <div className={`text-[8px] font-mono uppercase tracking-tight mt-0.5
-                                    ${isCritical ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
+                                    ${isCritical ? 'text-red-400 font-bold' : isCollision ? 'text-amber-400 font-bold' : 'text-slate-400'}`}>
                                     {log.resultMessage}
                                  </div>
                               </div>
 
                               <div className="flex items-center gap-2 shrink-0">
-                                 {(log.fatigueGained > 0 || isMove) && (
-                                   <div className="bg-purple-500/20 border border-purple-500/40 px-2 py-0.5 rounded-lg flex flex-col items-center min-w-[35px]">
-                                      <span className="text-[6px] font-mono text-purple-400 uppercase leading-none mb-0.5">Strain</span>
-                                      <span className="text-[9px] font-black text-white leading-none">+{log.fatigueGained || 1}</span>
+                                 {isMove && log.apSpent > 0 && (
+                                   <div className="bg-sky-500/20 border border-sky-500/40 px-2 py-0.5 rounded-lg flex flex-col items-center min-w-[35px]">
+                                      <span className="text-[6px] font-mono text-sky-400 uppercase leading-none mb-0.5">Energy</span>
+                                      <span className="text-[9px] font-black text-white leading-none">-{log.apSpent} AP</span>
                                    </div>
                                  )}
-                                 {isAttack && log.damage !== undefined && (
+                                 {(isAttack || isCollision) && log.damage !== undefined && (
                                    <div className="bg-red-500/20 border border-red-500/40 px-2 py-0.5 rounded-lg flex flex-col items-center">
                                       <span className="text-[6px] font-mono text-red-400 uppercase leading-none mb-0.5">Impact</span>
                                       <span className="text-[9px] font-black text-red-400 leading-none">{log.damage}</span>
@@ -297,6 +340,16 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({ game }) => {
                               </div>
                            </div>
                        </div>
+
+                       {/* Detailed Math Log */}
+                       {log.mathDetails && (
+                          <div className="mt-2 pt-2 border-t border-white/5 flex items-start gap-2">
+                             <Calculator size={10} className="text-slate-500 mt-0.5" />
+                             <div className="font-mono text-[7px] text-slate-500 break-all leading-tight tracking-wider">
+                                {log.mathDetails}
+                             </div>
+                          </div>
+                       )}
 
                        {isBlock && log.defenseTier && (
                          <div className="mt-1 border-t border-white/5 pt-2 animate-in fade-in duration-500">
@@ -349,30 +402,6 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({ game }) => {
             )}
          </div>
       </div>
-
-      {/* Tutorial Overlay for Resolution Phase */}
-      {tutorial.isActive && tutorial.step === 6 && game.currentCampaignLevelId === 'C1-L1' && (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-6 animate-in fade-in duration-300">
-           <div className="bg-slate-900 border border-teal-500 p-6 rounded-3xl max-w-md w-full shadow-2xl space-y-4">
-              <div className="flex items-center gap-3 text-teal-400">
-                 <Info size={24} />
-                 <h3 className="text-lg font-black uppercase italic">TUTORIAL: AFTERMATH</h3>
-              </div>
-              <p className="text-xs text-slate-300 font-mono leading-relaxed">
-                 The <strong>RESOLUTION LOG</strong> shows the outcome of all secret actions. 
-                 <br/><br/>
-                 Review how much damage you took versus how much you mitigated. 
-                 Use this data to predict your opponent's next move.
-              </p>
-              <div className="p-3 bg-black/40 rounded-xl border border-slate-800 text-[9px] font-mono text-slate-400">
-                 TIP: If an enemy blocked heavily this turn, they might be low on AP next turn.
-              </div>
-              <Button variant="primary" onClick={() => game.completeTutorial()}>
-                 COMPLETE TRAINING
-              </Button>
-           </div>
-        </div>
-      )}
     </ScreenWrapper>
   );
 };
