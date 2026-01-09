@@ -13,10 +13,11 @@ interface TacticalGridProps {
   selectedDest?: Position;
   onTileClick: (pos: Position) => void;
   targetId?: string;
+  firingLine?: { start: Position, end: Position };
 }
 
 export const TacticalGrid: React.FC<TacticalGridProps> = ({ 
-  map, players, currentPlayerId, reachableTiles, selectedDest, onTileClick, targetId
+  map, players, currentPlayerId, reachableTiles, selectedDest, onTileClick, targetId, firingLine
 }) => {
   const currentPlayer = players.find(p => p.id === currentPlayerId);
   const targetPlayer = players.find(p => p.id === targetId);
@@ -58,16 +59,41 @@ export const TacticalGrid: React.FC<TacticalGridProps> = ({
     }
   };
 
+  // Helper to convert grid coord to percentage for SVG line
+  const getCenterPct = (val: number) => (val * (100 / GRID_SIZE)) + (100 / GRID_SIZE / 2);
+
   return (
     <div className="relative p-4 select-none">
       <div 
-        className="grid gap-1"
+        className="grid gap-1 relative"
         style={{ 
           gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))`,
           width: 'min(90vw, 400px)',
           height: 'min(90vw, 400px)'
         }}
       >
+        {/* Firing Line Layer */}
+        {firingLine && (
+          <svg className="absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible">
+            <defs>
+              <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
+                <polygon points="0 0, 6 2, 0 4" fill="#ef4444" />
+              </marker>
+            </defs>
+            <line 
+              x1={`${getCenterPct(firingLine.start.x)}%`} 
+              y1={`${getCenterPct(firingLine.start.y)}%`} 
+              x2={`${getCenterPct(firingLine.end.x)}%`} 
+              y2={`${getCenterPct(firingLine.end.y)}%`} 
+              stroke="#ef4444" 
+              strokeWidth="2" 
+              strokeDasharray="5,5"
+              markerEnd="url(#arrowhead)"
+              className="opacity-60 animate-pulse"
+            />
+          </svg>
+        )}
+
         {map.tiles.map((row, y) => (
           row.map((type, x) => {
             const reachInfo = reachableTiles.find(p => p.x === x && p.y === y);

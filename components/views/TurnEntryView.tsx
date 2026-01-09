@@ -1,9 +1,8 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { ScreenWrapper } from '../layout/ScreenWrapper';
 import { GlobalHeader } from '../layout/GlobalHeader';
 import { Button } from '../ui/Button';
-import { Shield, Skull, ChevronUp, Brain, Zap, Activity, Heart, ChevronRight, Minus, Plus, Move, Undo, Target } from 'lucide-react';
+import { Shield, Skull, ChevronUp, Brain, Zap, Activity, Heart, ChevronRight, Minus, Plus, Move, Undo, Target, Ban, CornerUpLeft, Trash2 } from 'lucide-react';
 import { BASE_ATTACK_DMG, ATTACK_CONFIG, BLOCK_CONFIG, DESPERATION_MOVES } from '../../constants';
 import { Phase, ActionType, UnitType, Position, TileType } from '../../types';
 import { TacticalGrid } from '../tactical/TacticalGrid';
@@ -11,6 +10,10 @@ import { getStride, getReachableTiles, getManhattanDistance, getObstaclesInLine,
 
 interface TurnEntryViewProps {
   game: any;
+}
+
+interface PathNode extends Position {
+  cost: number;
 }
 
 const TutorialOverlay: React.FC<{ step: number, onNext: () => void }> = ({ step, onNext }) => {
@@ -74,9 +77,11 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
   // Local drafting state
   const [localBlockTier, setLocalBlockTier] = useState(0); 
   const [localAttackTier, setLocalAttackTier] = useState(0); 
-  // We now track a path of positions. Start is implicitly p.position.
-  const [localMovePath, setLocalMovePath] = useState<Position[]>([]);
+  
+  // Refined Path State: Stores cost per step to allow precise undo
+  const [localMovePath, setLocalMovePath] = useState<PathNode[]>([]);
   const [localMoveAp, setLocalMoveAp] = useState(0);
+  
   const [localAbilityActive, setLocalAbilityActive] = useState(false);
   const [localTargetId, setLocalTargetId] = useState<string | undefined>(otherPlayers[0]?.id);
   const [moveMode, setMoveMode] = useState(false); 
@@ -84,6 +89,13 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
   // Sheet State
   const [isSheetExpanded, setIsSheetExpanded] = useState(true); 
   const touchStartY = useRef(0);
+
+  // Auto-collapse sheet when entering move mode
+  useEffect(() => {
+    if (moveMode) {
+      setIsSheetExpanded(false);
+    }
+  }, [moveMode]);
 
   // Computed Values
   // @ts-ignore
@@ -122,7 +134,7 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
     // Check if reachable
     const tile = reachableTiles.find(r => r.x === pos.x && r.y === pos.y);
     if (tile && tile.costInAp <= availableApForNextMove) {
-      setLocalMovePath([...localMovePath, { x: pos.x, y: pos.y }]);
+      setLocalMovePath([...localMovePath, { x: pos.x, y: pos.y, cost: tile.costInAp }]);
       setLocalMoveAp(prev => prev + tile.costInAp);
       playSfx('confirm');
     }
@@ -137,7 +149,15 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
     playSfx('confirm');
   };
 
-  const handleResetMove = () => {
+  const handleUndoLastMove = () => {
+    if (localMovePath.length === 0) return;
+    const lastNode = localMovePath[localMovePath.length - 1];
+    setLocalMoveAp(prev => Math.max(0, prev - lastNode.cost));
+    setLocalMovePath(prev => prev.slice(0, -1));
+    playSfx('cancel');
+  };
+
+  const handleClearMove = () => {
       setLocalMovePath([]);
       setLocalMoveAp(0);
       playSfx('cancel');
@@ -156,23 +176,29 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
   };
 
   // Helper for Attack Projection (Hit and Run aware)
-  // NOW STRICTLY CHECKS LOS AND RANGE
-  const calculateProjectedDmg = (target: any) => {
-    if (localAttackTier === 0) return 0;
+  const calculateProjectedDmg = (target: any): { damage: number, reason: 'RANGE' | 'BLOCKED' | 'OK', optimalSource?: Position } => {
+    if (localAttackTier === 0) return { damage: 0, reason: 'OK' };
     
     // Check from all points in path (Hit and Run)
     const pathPoints = [p.position, ...localMovePath];
     let bestMult = 0;
     let hasValidShot = false;
+    let failureReason: 'RANGE' | 'BLOCKED' = 'RANGE';
+    let optimalSource = p.position;
 
     const unitRange = p.unit?.range || 2;
     const unitType = p.unit?.type;
 
-    pathPoints.forEach(pos => {
+    for (const pos of pathPoints) {
         const dist = getManhattanDistance(pos, target.position);
         
         // 1. Strict Range Check
-        if (dist > unitRange) return;
+        if (dist > unitRange) {
+           continue;
+        }
+
+        // If we reach here, we are IN RANGE. Any failure from here is due to BLOCK.
+        failureReason = 'BLOCKED';
 
         // 2. Strict LOS Check
         const obstacles = getObstaclesInLine(pos, target.position, game.activeMap);
@@ -180,7 +206,7 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
         if (unitType === UnitType.TROJAN) allowedObstacles = 1;
         if (unitType === UnitType.GHOST && localAttackTier === 3) allowedObstacles = 1;
 
-        if (obstacles > allowedObstacles) return;
+        if (obstacles > allowedObstacles) continue;
 
         // If here, shot is possible
         hasValidShot = true;
@@ -193,15 +219,18 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
         const thresholdBonus = (tileType === TileType.THRESHOLD) ? 1.10 : 1.0;
 
         const totalMult = rangeMult * thresholdBonus;
-        if (totalMult > bestMult) bestMult = totalMult;
-    });
+        if (totalMult > bestMult) {
+            bestMult = totalMult;
+            optimalSource = pos;
+        }
+    }
 
-    if (!hasValidShot) return 0; // 0 Indicates Invalid/Blocked
+    if (!hasValidShot) return { damage: 0, reason: failureReason };
 
     // @ts-ignore
     const atkConfig = ATTACK_CONFIG[localAttackTier];
     const base = BASE_ATTACK_DMG * atkConfig.mult * (p.unit?.atkStat || 1.0);
-    return Math.floor(base * bestMult);
+    return { damage: Math.floor(base * bestMult), reason: 'OK', optimalSource };
   };
 
   const calculateShield = () => {
@@ -214,8 +243,13 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
   };
 
   // Validation for Execute Button
-  const currentTargetDmg = targetPlayer ? calculateProjectedDmg(targetPlayer) : 0;
-  const isAttackValid = localAttackTier === 0 || (!!localTargetId && currentTargetDmg > 0);
+  const currentTargetCheck = targetPlayer ? calculateProjectedDmg(targetPlayer) : { damage: 0, reason: 'OK' as const, optimalSource: undefined };
+  const isAttackValid = localAttackTier === 0 || (!!localTargetId && currentTargetCheck.damage > 0);
+  
+  // Firing Line Logic for visual feedback
+  const activeFiringLine = (localAttackTier > 0 && isAttackValid && targetPlayer && currentTargetCheck.optimalSource)
+    ? { start: currentTargetCheck.optimalSource, end: targetPlayer.position }
+    : undefined;
 
   if (game.isAIThinking) {
     return (
@@ -247,11 +281,12 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
             selectedDest={currentStartPos} // Highlight where we are currently 'planning' from
             onTileClick={handleTileClick}
             targetId={localAttackTier > 0 && isAttackValid ? localTargetId : undefined}
+            firingLine={activeFiringLine}
           />
           
           {/* Movement Path Visualization Overlay */}
           {localMovePath.length > 0 && (
-             <div className="absolute top-4 left-1/2 -translate-x-1/2 flex gap-1 pointer-events-none">
+             <div className="absolute top-4 left-1/2 -translate-x-1/2 flex gap-1 pointer-events-none z-30">
                 {localMovePath.map((_, i) => (
                    <div key={i} className="w-2 h-2 rounded-full bg-sky-500 animate-pulse"></div>
                 ))}
@@ -335,9 +370,22 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
                    <div>
                       <div className="text-xs font-black uppercase text-white italic">MANEUVER</div>
                       {localMovePath.length > 0 ? (
-                         <div className="text-[8px] font-bold text-sky-400 uppercase mt-1 flex items-center gap-2">
-                            {localMovePath.length} Legs Plotted
-                            <span onClick={(e) => { e.stopPropagation(); handleResetMove(); }} className="p-1 bg-slate-800 rounded hover:text-white cursor-pointer"><Undo size={10}/></span>
+                         <div className="flex items-center gap-2 mt-1">
+                            <span 
+                               onClick={(e) => { e.stopPropagation(); handleUndoLastMove(); }} 
+                               className="h-6 w-6 flex items-center justify-center bg-slate-800 rounded hover:bg-slate-700 hover:text-white cursor-pointer transition-colors"
+                            >
+                               <CornerUpLeft size={12}/>
+                            </span>
+                            <span 
+                               onClick={(e) => { e.stopPropagation(); handleClearMove(); }} 
+                               className="h-6 w-6 flex items-center justify-center bg-red-950/30 text-red-500 rounded hover:bg-red-900/50 cursor-pointer transition-colors"
+                            >
+                               <Trash2 size={12}/>
+                            </span>
+                            <span className="text-[8px] font-bold text-sky-400 uppercase ml-1">
+                               {localMovePath.length} Steps
+                            </span>
                          </div>
                       ) : (
                          <div className="text-[8px] text-slate-600 uppercase mt-1 italic">{moveMode ? 'Select Sequence' : 'Hold Position'}</div>
@@ -383,8 +431,11 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
                {localAttackTier > 0 && (
                   <div className="flex gap-2 overflow-x-auto pb-2">
                      {otherPlayers.map((t: any) => {
-                        const dmg = calculateProjectedDmg(t);
-                        const isValid = dmg > 0;
+                        const check = calculateProjectedDmg(t);
+                        const isValid = check.damage > 0;
+                        const hpPercentage = (t.hp / t.maxHp) * 100;
+                        const damagePercentage = Math.min(hpPercentage, (check.damage / t.maxHp) * 100);
+
                         return (
                            <button 
                               key={t.id} 
@@ -396,10 +447,34 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
                                     playSfx('cancel');
                                  }
                               }} 
-                              className={`flex-1 min-w-[100px] p-3 rounded-xl border transition-all text-left relative overflow-hidden ${!isValid ? 'opacity-50 border-slate-900 bg-slate-950 cursor-not-allowed' : localTargetId === t.id ? 'bg-red-500/10 border-red-500/50' : 'bg-black/20 border-slate-800'}`}
+                              className={`flex-1 min-w-[100px] p-3 rounded-xl border transition-all text-left relative overflow-hidden 
+                                ${!isValid ? 'opacity-40 grayscale bg-slate-950 border-slate-900 cursor-not-allowed' : 
+                                  localTargetId === t.id ? 'bg-red-500/10 border-red-500/50' : 'bg-black/20 border-slate-800'}`}
                            >
+                              {!isValid && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20">
+                                   <Ban className="text-red-500/80" size={24} />
+                                </div>
+                              )}
+                              
                               <div className="text-[9px] font-black uppercase text-white truncate relative z-10">{t.name}</div>
-                              <div className={`text-[8px] font-mono mt-1 relative z-10 ${isValid ? 'text-slate-500' : 'text-red-500 font-bold'}`}>{isValid ? `~${dmg} DMG` : 'BLOCKED'}</div>
+                              
+                              {/* Damage Bar Visual */}
+                              <div className="mt-2 h-1.5 w-full bg-slate-800 rounded-full overflow-hidden relative z-10">
+                                 {/* Current HP */}
+                                 <div className="h-full bg-teal-500 absolute left-0 top-0" style={{ width: `${hpPercentage}%` }}></div>
+                                 {/* Projected Damage */}
+                                 {isValid && (
+                                    <div 
+                                       className="h-full bg-red-500 absolute top-0 animate-pulse" 
+                                       style={{ left: `${hpPercentage - damagePercentage}%`, width: `${damagePercentage}%` }}
+                                    ></div>
+                                 )}
+                              </div>
+
+                              <div className={`text-[8px] font-mono mt-1 relative z-10 ${isValid ? 'text-slate-500' : 'text-red-500 font-bold'}`}>
+                                {isValid ? `${check.damage} DMG` : check.reason === 'RANGE' ? 'OUT OF RANGE' : 'LOS BLOCKED'}
+                              </div>
                               {localTargetId === t.id && isValid && <div className="absolute top-1 right-1"><Target size={10} className="text-red-500 animate-pulse"/></div>}
                            </button>
                         );
@@ -422,7 +497,7 @@ export const TurnEntryView: React.FC<TurnEntryViewProps> = ({ game }) => {
                     blockAp: localBlockTier, 
                     attackAp: localAttackTier, 
                     moveAp: localMoveAp,
-                    movePath: localMovePath, // Submit the whole path
+                    movePath: localMovePath.map(p => ({ x: p.x, y: p.y })), // Strip cost for backend
                     abilityActive: localAbilityActive,
                     targetId: localTargetId,
                     moveDest: finalMoveDest
