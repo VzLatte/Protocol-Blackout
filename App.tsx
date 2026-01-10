@@ -8,6 +8,8 @@ import { ChapterSelectionView } from './components/views/ChapterSelectionView';
 import { NodeSelectorView } from './components/views/NodeSelectorView';
 import { ArchiveView } from './components/views/ArchiveView';
 import { BlackMarketView } from './components/views/BlackMarketView';
+import { AgencyView } from './components/views/AgencyView';
+import { ArmoryView } from './components/views/ArmoryView';
 import { MenuView } from './components/views/MenuView';
 import { SetupPlayersView } from './components/views/SetupPlayersView';
 import { SelectionView } from './components/views/SelectionView';
@@ -31,6 +33,7 @@ const App: React.FC = () => {
   const [promoCode, setPromoCode] = useState("");
   const [promoMessage, setPromoMessage] = useState<string | null>(null);
   const [activeDocument, setActiveDocument] = useState<{title: string, content: string} | null>(null);
+  const [isNavHidden, setIsNavHidden] = useState(false);
 
   // --- BGM Management ---
   useEffect(() => {
@@ -114,14 +117,14 @@ const App: React.FC = () => {
        return <SplashView visualLevel={game.visualLevel} onInitialize={handleInitialize} />;
     }
 
+    if (currentTab === Tab.AGENCY) {
+      return <AgencyView game={game} onBack={() => setCurrentTab(Tab.TERMINAL)} />;
+    }
+    if (currentTab === Tab.ARMORY) {
+      return <ArmoryView game={game} onBack={() => setCurrentTab(Tab.TERMINAL)} />;
+    }
     if (currentTab === Tab.MARKET) {
-      return <BlackMarketView game={game} onBack={() => setCurrentTab(Tab.TERMINAL)} />;
-    }
-    if (currentTab === Tab.ARCHIVE) {
-      return <ArchiveView game={game} onBack={() => setCurrentTab(Tab.TERMINAL)} />;
-    }
-    if (currentTab === Tab.OPERATIVES) {
-      return <OperativesListView game={game} onHelp={() => game.setIsHelpOpen(true)} onSettings={() => game.setIsSettingsOpen(true)} />;
+      return <BlackMarketView game={game} onBack={() => setCurrentTab(Tab.TERMINAL)} setHideNav={setIsNavHidden} />;
     }
 
     switch (game.phase) {
@@ -135,6 +138,7 @@ const App: React.FC = () => {
             onSettings={() => game.setIsSettingsOpen(true)}
             credits={game.credits}
             xp={game.xp}
+            setHideNav={setIsNavHidden}
           />
         );
       case Phase.CHAPTER_SELECTION:
@@ -164,6 +168,7 @@ const App: React.FC = () => {
             onSettings={() => game.setIsSettingsOpen(true)}
             credits={game.credits}
             xp={game.xp}
+            setHideNav={setIsNavHidden}
           />;
     }
   };
@@ -172,14 +177,16 @@ const App: React.FC = () => {
     <>
       {renderActiveView()}
       
-      <BottomNav 
-        currentTab={currentTab} 
-        onTabChange={(tab) => {
-          playSfx('beep');
-          setCurrentTab(tab);
-        }} 
-        phase={game.phase} 
-      />
+      {!isNavHidden && (
+        <BottomNav 
+          currentTab={currentTab} 
+          onTabChange={(tab) => {
+            playSfx('beep');
+            setCurrentTab(tab);
+          }} 
+          phase={game.phase} 
+        />
+      )}
 
       <Modal 
         isOpen={game.isHelpOpen} 

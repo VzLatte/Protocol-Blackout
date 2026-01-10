@@ -1,6 +1,6 @@
 
 import { Position, GridMap, TileType } from '../types';
-import { GRID_SIZE, TILE_COSTS } from '../constants';
+import { GRID_SIZE, TILE_COSTS, BASE_MOVE_COST } from '../constants';
 
 export function getManhattanDistance(p1: Position, p2: Position): number {
   return Math.abs(p1.x - p2.x) + Math.abs(p1.y - p2.y);
@@ -11,7 +11,7 @@ export function isValidPos(p: Position): boolean {
 }
 
 export function getStride(speed: number): number {
-  return Math.round(2 * speed);
+  return Math.max(2, Math.round(2 * speed));
 }
 
 export interface ReachableTile {
@@ -22,32 +22,35 @@ export interface ReachableTile {
 
 /**
  * Returns a list of all tiles reachable within the AP budget.
- * Used for AI scoring and UI Highlighting.
+ * Updated: Removed 'stride' cap. Purely AP cost based.
  */
 export function getReachableTiles(
   start: Position, 
-  stride: number, 
   maxAp: number, 
   map: GridMap, 
-  occupied: Position[] = [] 
+  occupied: Position[],
+  unitSpeed: number = 1.0
 ): ReachableTile[] {
-  const maxMp = maxAp * stride; // Total Movement Points available
-  const costs: Record<string, number> = {}; // key: "x,y", val: mpSpent
-  const queue: { pos: Position, mp: number }[] = [{ pos: start, mp: 0 }];
+  const moveCostBase = BASE_MOVE_COST;
+  const actualCost = Math.max(1, Math.round(moveCostBase / unitSpeed));
+  
+  const maxMp = maxAp; 
+  const costs: Record<string, number> = {}; 
+  const queue: { pos: Position, apSpent: number }[] = [{ pos: start, apSpent: 0 }];
   
   costs[`${start.x},${start.y}`] = 0;
 
   const result: ReachableTile[] = [];
 
   while (queue.length > 0) {
-    queue.sort((a, b) => a.mp - b.mp);
-    const { pos, mp } = queue.shift()!;
+    queue.sort((a, b) => a.apSpent - b.apSpent);
+    const { pos, apSpent } = queue.shift()!;
 
     if (pos.x !== start.x || pos.y !== start.y) {
        result.push({
          x: pos.x,
          y: pos.y,
-         costInAp: Math.ceil(mp / stride)
+         costInAp: apSpent
        });
     }
 
@@ -66,14 +69,18 @@ export function getReachableTiles(
       if (tileType === TileType.OBSTACLE) continue;
       if (occupied.some(occ => occ.x === n.x && occ.y === n.y)) continue;
 
-      const moveCost = TILE_COSTS[tileType] || 1;
-      const newMp = mp + moveCost;
+      let terrainMult = 1;
+      if (tileType === TileType.HIGH_GROUND) terrainMult = 1.5;
+      if (tileType === TileType.DEBRIS) terrainMult = 2.0;
 
-      if (newMp <= maxMp) {
+      const stepCost = Math.round(actualCost * terrainMult);
+      const newApSpent = apSpent + stepCost;
+
+      if (newApSpent <= maxMp) {
         const key = `${n.x},${n.y}`;
-        if (costs[key] === undefined || newMp < costs[key]) {
-          costs[key] = newMp;
-          queue.push({ pos: n, mp: newMp });
+        if (costs[key] === undefined || newApSpent < costs[key]) {
+          costs[key] = newApSpent;
+          queue.push({ pos: n, apSpent: newApSpent });
         }
       }
     }
@@ -91,29 +98,51 @@ export function getReachableTiles(
 }
 
 /**
- * Finds the shortest valid path between start and end using BFS.
- * Returns array of positions excluding start, including end.
- * Used for actual AI movement execution to prevent wall-phasing.
+ * Dijkstra Pathfinding: Finds lowest COST path.
+ * Respects Terrain Costs (Debris 2x, etc).
+ * Previously known as 'findOptimalPath'.
  */
-export function findPath(start: Position, end: Position, map: GridMap, occupied: Position[] = []): Position[] {
+export function findPath(
+  start: Position, 
+  end: Position, 
+  map: GridMap, 
+  occupied: Position[] = [], // Kept for signature compatibility, though often empty for simple pathing
+  unitSpeed: number = 1.0
+): Position[] {
   if (start.x === end.x && start.y === end.y) return [];
 
-  const queue: { pos: Position, path: Position[] }[] = [{ pos: start, path: [] }];
+  const moveCostBase = BASE_MOVE_COST;
+  const actualCost = Math.max(1, Math.round(moveCostBase / unitSpeed));
+
+  const nodes: Record<string, { pos: Position; cost: number; parent: string | null }> = {};
+  const queue: string[] = [`${start.x},${start.y}`];
+  
+  nodes[`${start.x},${start.y}`] = { pos: start, cost: 0, parent: null };
+
   const visited = new Set<string>();
-  visited.add(`${start.x},${start.y}`);
 
   while (queue.length > 0) {
-    const { pos, path } = queue.shift()!;
+    // Sort queue by lowest accumulated cost (Dijkstra's core)
+    queue.sort((a, b) => nodes[a].cost - nodes[b].cost);
+    const currentKey = queue.shift()!;
+    const { pos, cost } = nodes[currentKey];
 
     if (pos.x === end.x && pos.y === end.y) {
+      // Reconstruct path
+      const path: Position[] = [];
+      let curr = currentKey;
+      while (nodes[curr].parent !== null) {
+        path.unshift(nodes[curr].pos);
+        curr = nodes[curr].parent!;
+      }
       return path;
     }
 
+    visited.add(currentKey);
+
     const neighbors = [
-      { x: pos.x + 1, y: pos.y },
-      { x: pos.x - 1, y: pos.y },
-      { x: pos.x, y: pos.y + 1 },
-      { x: pos.x, y: pos.y - 1 }
+      { x: pos.x + 1, y: pos.y }, { x: pos.x - 1, y: pos.y },
+      { x: pos.x, y: pos.y + 1 }, { x: pos.x, y: pos.y - 1 }
     ];
 
     for (const n of neighbors) {
@@ -122,19 +151,22 @@ export function findPath(start: Position, end: Position, map: GridMap, occupied:
       if (visited.has(key)) continue;
 
       const tileType = map.tiles[n.y][n.x];
-      
-      // Allow moving onto the END tile even if it's technically occupied (collision logic handles that later)
-      // But walls are hard stops.
       if (tileType === TileType.OBSTACLE) continue;
-      
-      // We don't check 'occupied' strictly here because dynamic collision resolution happens in combatEngine
-      // But if we wanted strict pathfinding we would check occupied.
-      
-      visited.add(key);
-      queue.push({ pos: n, path: [...path, n] });
+
+      let terrainMult = 1;
+      if (tileType === TileType.HIGH_GROUND) terrainMult = 1.5;
+      if (tileType === TileType.DEBRIS) terrainMult = 2.0;
+
+      const stepCost = Math.round(actualCost * terrainMult);
+      const totalCost = cost + stepCost;
+
+      if (!nodes[key] || totalCost < nodes[key].cost) {
+        nodes[key] = { pos: n, cost: totalCost, parent: currentKey };
+        if (!queue.includes(key)) queue.push(key);
+      }
     }
   }
-  return []; // No path found
+  return [];
 }
 
 export function getObstaclesInLine(start: Position, end: Position, map: GridMap): number {

@@ -1,6 +1,6 @@
 
-import { useState, useEffect, useRef } from 'react';
-import { Phase, Action, TurnData, DifficultyLevel, UnitType } from '../types';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Phase, Action, TurnData, DifficultyLevel, UnitType, TileType, WinCondition } from '../types';
 import { calculateAIMove } from '../aiLogic';
 import { CAMPAIGN_LEVELS } from '../campaignRegistry';
 
@@ -24,6 +24,25 @@ export function useAIController(
   const isAiTurn = battle.phase === Phase.TURN_ENTRY && activePlayer?.isAI;
   const isAiSelection = battle.phase === Phase.BLACKOUT_SELECTION && activePlayer?.isAI;
 
+  const levelData = currentCampaignLevelId ? CAMPAIGN_LEVELS.find(l => l.id === currentCampaignLevelId) : null;
+
+  // Memoize Threshold Position scan based on Map ID (assumes map structure is constant per ID)
+  const thresholdPos = useMemo(() => {
+    let pos = undefined;
+    if (battle.activeMap) {
+        // Find a representative threshold tile (e.g., center of the zone)
+        // Since aiLogic now checks all Threshold tiles, getting one is enough to guide distance heuristic
+        battle.activeMap.tiles.forEach((row: any[], y: number) => {
+            row.forEach((tile: TileType, x: number) => {
+                if (tile === TileType.THRESHOLD && !pos) {
+                    pos = { x, y };
+                }
+            });
+        });
+    }
+    return pos;
+  }, [battle.activeMap.id]);
+
   // Safety: If phase changes away from AI turn, force thinking to false immediately
   useEffect(() => {
     if (!isAiTurn && isAIThinking) {
@@ -43,19 +62,28 @@ export function useAIController(
   useEffect(() => {
     if (isAiSelection) {
       timerRef.current = setTimeout(() => {
-        // Simple random selection if AI hasn't selected yet
-        if (!activePlayer.unit) {
-          const units = [UnitType.GHOST, UnitType.AEGIS, UnitType.REAPER, UnitType.PYRUS, UnitType.TROJAN, UnitType.KILLSHOT];
-          const randomUnit = units[Math.floor(Math.random() * units.length)];
-          battle.selectUnit(randomUnit);
-        } else {
-           // If already has unit (e.g. from campaign setup), just proceed
-           battle.selectUnit(activePlayer.unit.type);
+        // PRIORITY 1: Campaign Defined Unit
+        // Use the unit defined in the level registry to ensure narrative consistency
+        if (levelData?.enemyUnit) {
+           battle.selectUnit(levelData.enemyUnit);
+           return;
         }
+
+        // PRIORITY 2: Pre-assigned Unit (from setup)
+        if (activePlayer?.unit) {
+           battle.selectUnit(activePlayer.unit.type);
+           return;
+        }
+
+        // FALLBACK: Random Selection (Custom Games)
+        const units = [UnitType.PYRUS, UnitType.AEGIS, UnitType.GHOST, UnitType.REAPER, UnitType.HUNTER, UnitType.MEDIC];
+        const randomUnit = units[Math.floor(Math.random() * units.length)];
+        battle.selectUnit(randomUnit);
+        
       }, 800);
       return () => { if (timerRef.current) clearTimeout(timerRef.current); };
     }
-  }, [isAiSelection, activePlayer, battle.selectUnit]);
+  }, [isAiSelection, activePlayer, battle.selectUnit, levelData]);
 
   // Effect: Handle Turn Action for AI
   useEffect(() => {
@@ -66,7 +94,6 @@ export function useAIController(
     setIsAIThinking(true);
     
     // Calculate thinking time
-    const currentLevel = currentCampaignLevelId ? CAMPAIGN_LEVELS.find(l => l.id === currentCampaignLevelId) : null;
     const baseDelay = Math.min(1500, (currentChapter * 400));
     const thinkingTime = Math.max(800, baseDelay + Math.random() * 600);
 
@@ -74,6 +101,13 @@ export function useAIController(
       try {
         let aiMove: Action;
         
+        // Prepare Context Object
+        const aiContext = {
+            difficulty: campaignDifficulty,
+            winCondition: levelData?.winCondition || WinCondition.ELIMINATION,
+            thresholdPos: thresholdPos
+        };
+
         // Handle "Blackout" difficulty cheating or normal calc
         if (campaignDifficulty === DifficultyLevel.BLACKOUT) {
           aiMove = calculateAIMove(
@@ -81,8 +115,7 @@ export function useAIController(
             battle.players, 
             battle.fullHistory, 
             battle.round, 
-            currentChapter, 
-            campaignDifficulty,
+            aiContext,
             battle.activeMap,
             battle.currentTurnSubmissions
           );
@@ -92,8 +125,7 @@ export function useAIController(
             battle.players, 
             battle.fullHistory, 
             battle.round, 
-            currentChapter, 
-            campaignDifficulty,
+            aiContext,
             battle.activeMap
           );
         }
@@ -117,7 +149,8 @@ export function useAIController(
     isAiTurn, 
     // Do NOT add activePlayer or battle.players here to prevent timer resets on minor state updates. 
     battle.currentPlayerIdx,
-    battle.phase
+    battle.phase,
+    thresholdPos // Added memoized dependency
   ]);
 
   return { isAIThinking };

@@ -2,13 +2,14 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Player, TurnData, ResolutionLog, Phase, GameMode, Action, DifficultyLevel, HazardType, Unit, UnitType, GridMap } from '../types';
 import { INITIAL_HP, MAPS } from '../constants';
-import { resolveCombat } from '../combatEngine';
+import { resolveCombat } from '../logic/combat';
 import { UNITS } from '../operativeRegistry';
 
 export function useBattleEngine() {
   const [phase, setPhase] = useState<Phase>(Phase.SPLASH);
   const [mode, setMode] = useState<GameMode>(GameMode.TACTICAL);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [prevPlayers, setPrevPlayers] = useState<Player[]>([]); // New state for replay
   const [currentPlayerIdx, setCurrentPlayerIdx] = useState(0);
   const [round, setRound] = useState(1);
   const [maxRounds, setMaxRounds] = useState(10);
@@ -35,10 +36,10 @@ export function useBattleEngine() {
   }, [phase, players, currentPlayerIdx]);
 
   const initDistances = (pList: Player[]) => {
-    // Legacy support: Initialize positions if missing
     pList.forEach((p, idx) => {
         if (!p.position) {
-            p.position = idx === 0 ? { x: 0, y: 3 } : { x: 6, y: 3 };
+            // Updated for 11x11 Grid (Center Y is 5)
+            p.position = idx === 0 ? { x: 0, y: 5 } : { x: 10, y: 5 };
         }
     });
   };
@@ -90,7 +91,9 @@ export function useBattleEngine() {
     hazard: HazardType,
     levelId: string | null
   ) => {
-    // Pass activeMap to resolution engine
+    // Capture state BEFORE resolution for the replay visualizer
+    setPrevPlayers(JSON.parse(JSON.stringify(players)));
+
     const result = resolveCombat(players, submissions, round, maxRounds, mode, activeChaosEvent, new Map(), difficulty, hazard, activeMap);
     
     setPlayers(result.nextPlayers);
@@ -98,6 +101,7 @@ export function useBattleEngine() {
     setFullHistory(prev => [...prev, submissions]);
     setPhase(Phase.RESOLUTION);
     setRound(result.nextRound);
+    setActiveMap(result.nextMap); // Update map state from resolution
     
     return result.nextPlayers;
   };
@@ -116,6 +120,7 @@ export function useBattleEngine() {
 
   const resetBattle = () => {
     setPlayers([]);
+    setPrevPlayers([]);
     setRound(1);
     setCurrentTurnSubmissions([]);
     setResolutionLogs([]);
@@ -123,13 +128,14 @@ export function useBattleEngine() {
     setActiveChaosEvent(null);
     setFogOfWarActive(0);
     setVictoryReason(null);
-    setActiveMap(MAPS[1]); // Reset to default map
+    setActiveMap(MAPS[1]); 
   };
 
   return {
     phase, setPhase,
     mode, setMode,
     players, setPlayers,
+    prevPlayers, // Export previous state
     currentPlayerIdx, setCurrentPlayerIdx,
     round, setRound,
     maxRounds, setMaxRounds,
@@ -140,7 +146,7 @@ export function useBattleEngine() {
     activeChaosEvent, setActiveChaosEvent,
     fogOfWarActive, setFogOfWarActive,
     phaseTransition, setPhaseTransition,
-    activeMap, setActiveMap, // Export map state
+    activeMap, setActiveMap, 
     initDistances,
     selectUnit,
     submitTurnAction,

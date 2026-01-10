@@ -1,14 +1,26 @@
 
-import { Player, Action, AIArchetype, TurnData, DifficultyLevel, GridMap, TileType, Position, UnitType, AIDifficulty } from './types';
+import { Player, Action, AIArchetype, TurnData, DifficultyLevel, GridMap, TileType, Position, UnitType, AIDifficulty, WinCondition } from './types';
 import { getReachableTiles, getManhattanDistance, getStride, getCoverStatus, getObstaclesInLine, findPath, ReachableTile } from './utils/gridLogic';
-import { ATTACK_CONFIG, BASE_ATTACK_DMG } from './constants';
+import { ATTACK_CONFIG, BASE_ATTACK_DMG, BASE_MOVE_COST, BLOCK_CONFIG } from './constants';
+import { calculateIncome, MAX_AP } from './apManager';
 
-const getCost = (tier: number) => tier === 1 ? 1 : tier === 2 ? 3 : 6;
+interface AIContext {
+    difficulty: DifficultyLevel;
+    winCondition?: WinCondition;
+    thresholdPos?: Position; // Center or reference
+}
 
-const getMaxTier = (budget: number) => {
-  if (budget >= 6) return 3;
-  if (budget >= 3) return 2;
-  if (budget >= 1) return 1;
+const getCost = (tier: number, type: 'ATTACK' | 'BLOCK') => {
+    // @ts-ignore
+    const config = type === 'ATTACK' ? ATTACK_CONFIG : BLOCK_CONFIG;
+    // @ts-ignore
+    return config[tier]?.ap || 999;
+};
+
+const getMaxTier = (budget: number, type: 'ATTACK' | 'BLOCK') => {
+  if (budget >= getCost(3, type)) return 3;
+  if (budget >= getCost(2, type)) return 2;
+  if (budget >= getCost(1, type)) return 1;
   return 0;
 };
 
@@ -19,8 +31,7 @@ export function calculateAIMove(
   allPlayers: Player[], 
   history: TurnData[][], 
   round: number,
-  currentChapter: number,
-  difficulty: DifficultyLevel,
+  context: AIContext,
   activeMap: GridMap,
   playerIntents: TurnData[] = []
 ): Action {
@@ -34,42 +45,43 @@ export function calculateAIMove(
   
   // 2. Pre-calculation
   const occupied = allPlayers.filter(p => !p.isEliminated && p.id !== aiPlayer.id).map(p => p.position);
-  const stride = getStride(aiPlayer.unit?.speed || 1);
-  const reachable = getReachableTiles(aiPlayer.position, stride, aiPlayer.ap, activeMap, occupied);
+  const unitSpeed = (aiPlayer.unit?.speed || 1.0) + (aiPlayer.loadout?.primary?.weight || 0) * 0.1;
   
-  // 3. Target Selection
-  const lastTargetId = getLastTargetId(aiPlayer.id, history);
-  const target = selectBestTarget(aiPlayer, opponents, reachable, activeMap, config, lastTargetId);
+  // STRIDE REMOVED: Utilization of full AP budget via updated getReachableTiles
+  const reachable = getReachableTiles(aiPlayer.position, aiPlayer.ap, activeMap, occupied, unitSpeed);
+  
+  // 3. Target Selection (Squad-Linked)
+  const target = selectBestTarget(aiPlayer, opponents, reachable, activeMap, config, teammates, history);
 
   if (!target) return { blockAp: 0, attackAp: 0, moveAp: 0, abilityActive: false };
 
-  // 4. Check Imminent Death (for desperation/venting logic)
-  const observableIntents = difficulty === DifficultyLevel.BLACKOUT ? playerIntents : [];
-  const imminentDeath = checkImminentDeath(aiPlayer, target, observableIntents);
+  // 4. Check Imminent Death
+  const imminentDeath = checkImminentDeath(aiPlayer, target, playerIntents, context.difficulty);
 
-  // 5. Position Selection
-  const bestTile = selectBestPosition(aiPlayer, target, reachable, activeMap, config, teammates);
+  // 5. Position Selection (Now with Collision Awareness)
+  const bestTile = selectBestPosition(aiPlayer, target, reachable, activeMap, config, teammates, unitSpeed, context, opponents, round);
 
-  // 6. AP Allocation
+  // 6. AP Allocation (Squad-Aware)
   const allocation = allocateActionPoints(
     aiPlayer, 
     target, 
     bestTile, 
     config, 
     activeMap, 
-    observableIntents, 
-    imminentDeath
+    playerIntents, 
+    imminentDeath,
+    unitSpeed,
+    round,
+    teammates,
+    history
   );
 
   if (allocation.isDesperation) {
     return { blockAp: 0, attackAp: 0, moveAp: 0, abilityActive: false, isDesperation: true };
   }
 
-  // 7. Ability Usage
-  const abilityActive = decideAbilityUsage(aiPlayer, config, difficulty);
-
-  // 8. Path Generation
-  const movePath = findPath(aiPlayer.position, bestTile, activeMap);
+  // DIJKSTRA UPDATE: Use the smart pathfinder
+  const movePath = findPath(aiPlayer.position, bestTile, activeMap, [], unitSpeed);
 
   return {
     moveAp: bestTile.costInAp,
@@ -77,25 +89,24 @@ export function calculateAIMove(
     movePath: movePath.length > 0 ? movePath : [bestTile],
     blockAp: allocation.blockAp,
     attackAp: allocation.attackAp,
-    abilityActive,
+    abilityActive: false, 
     targetId: target.id
   };
 }
 
-// --- HELPER FUNCTIONS ---
+// ... (Helper functions)
 
 function getLastTargetId(playerId: string, history: TurnData[][]): string | undefined {
   if (history.length > 0) {
       const lastRoundData = history[history.length - 1];
       const myLastTurn = lastRoundData.find(t => t.playerId === playerId);
-      if (myLastTurn?.action.targetId) {
-          return myLastTurn.action.targetId;
-      }
+      return myLastTurn?.action.targetId;
   }
   return undefined;
 }
 
-function checkImminentDeath(aiPlayer: Player, target: Player, intents: TurnData[]): boolean {
+function checkImminentDeath(aiPlayer: Player, target: Player, intents: TurnData[], difficulty: DifficultyLevel): boolean {
+  // 1. Omniscient Check (Blackout Difficulty or Visible Intent)
   if (intents.length > 0) {
       const incomingAttack = intents.find(i => i.playerId === target.id);
       if (incomingAttack && incomingAttack.action.attackAp > 0) {
@@ -105,7 +116,21 @@ function checkImminentDeath(aiPlayer: Player, target: Player, intents: TurnData[
           const predictedDmg = BASE_ATTACK_DMG * mult * (target.unit?.atkStat || 1) * 1.5; 
           if (predictedDmg >= aiPlayer.hp) return true;
       }
+      return false;
   }
+
+  // 2. Paranoia Check (Normal/Overclock)
+  if (difficulty === DifficultyLevel.OVERCLOCK) {
+      const dist = getManhattanDistance(aiPlayer.position, target.position);
+      const enemyRange = target.unit?.range || 2;
+      // If we are safe by distance, we are not in imminent death
+      if (dist > enemyRange) return false; 
+  }
+
+  // Assume target attacks with a standard Tier 2
+  const estimatedDmg = BASE_ATTACK_DMG * 1.2 * (target.unit?.atkStat || 1); // Tier 2 estimates
+  if (estimatedDmg >= aiPlayer.hp) return true;
+
   return false;
 }
 
@@ -115,74 +140,46 @@ function selectBestTarget(
   reachable: ReachableTile[],
   activeMap: GridMap,
   config: any,
-  lastTargetId?: string
+  teammates: Player[],
+  history: TurnData[][]
 ): Player | null {
-  const unitRange = aiPlayer.unit?.range || 2;
-  const minPierce = aiPlayer.unit?.minTierToPierceWalls ?? 99;
+  if (opponents.length === 0) return null;
 
-  let bestTarget = opponents[0];
-  let highestTargetScore = -Infinity;
+  let bestTarget: Player | null = null;
+  let bestScore = -99999;
 
-  opponents.forEach(op => {
-      const dist = getManhattanDistance(aiPlayer.position, op.position);
-      const hpPercent = op.hp / op.maxHp;
-      let score = 0;
+  opponents.forEach(opp => {
+    let score = 0;
 
-      // Base: Distance
-      score -= dist * 10;
+    // 1. Base HP Pressure (Lower is better)
+    score += (opp.maxHp - opp.hp) * 0.1;
 
-      // Low HP Bonus
-      if (hpPercent < 0.25) score += 50; 
-      else score -= hpPercent * 20;
+    // 2. Killability (Can we end them this turn?)
+    if (opp.hp < 200) score += 50;
 
-      // Archetype overrides
-      if (config.archetype === AIArchetype.AGGRO || aiPlayer.unit?.type === UnitType.REAPER) {
-          score += (1 - hpPercent) * 100; 
-      } else if (config.archetype === AIArchetype.STRATEGIST) {
-           if (hpPercent < 0.15) score += 200; 
-      } else if (config.archetype === AIArchetype.TURTLE) {
-          score -= dist * 20;
-      }
+    // 3. SQUAD-LINK: Focus Fire
+    // If a teammate already targeted this person in the last round, keep the pressure up
+    const focusCount = teammates.filter(tm => {
+        const lastTarget = getLastTargetId(tm.id, history);
+        return lastTarget === opp.id;
+    }).length;
+    score += focusCount * 30;
 
-      // Stickiness
-      if (lastTargetId && op.id === lastTargetId) {
-          score += 50;
-      }
+    // 4. Proximity
+    const dist = getManhattanDistance(aiPlayer.position, opp.position);
+    score -= dist * 2;
+    
+    // 5. Stickiness (Keep targeting same person if efficient)
+    const myLastTarget = getLastTargetId(aiPlayer.id, history);
+    if (myLastTarget === opp.id) score += 15;
 
-      // Clutter/Reachability Check
-      let canAttack = false;
-      const potentialPositions = [aiPlayer.position, ...reachable];
-      
-      for (const pos of potentialPositions) {
-          const d = getManhattanDistance(pos, op.position);
-          
-          if (d <= unitRange) {
-              const moveCost = (pos.x === aiPlayer.position.x && pos.y === aiPlayer.position.y) ? 0 : (pos as any).costInAp || 0;
-              const remainingAp = aiPlayer.ap - moveCost;
-              const maxPossibleTier = getMaxTier(remainingAp);
-              
-              if (maxPossibleTier < 1) continue;
-
-              const canIgnoreWalls = maxPossibleTier >= minPierce;
-              const obstacles = getObstaclesInLine(pos, op.position, activeMap);
-
-              if (obstacles === 0 || canIgnoreWalls) {
-                  canAttack = true;
-                  break;
-              }
-          }
-      }
-
-      if (canAttack) score += 300; 
-      else score -= 1000; 
-      
-      if (score > highestTargetScore) {
-          highestTargetScore = score;
-          bestTarget = op;
-      }
+    if (score > bestScore) {
+      bestScore = score;
+      bestTarget = opp;
+    }
   });
 
-  return bestTarget || null;
+  return bestTarget;
 }
 
 function selectBestPosition(
@@ -191,124 +188,91 @@ function selectBestPosition(
   reachable: ReachableTile[],
   activeMap: GridMap,
   config: any,
-  teammates: Player[]
+  teammates: Player[],
+  unitSpeed: number,
+  context: AIContext,
+  opponents: Player[],
+  round: number
 ): ReachableTile {
   const unitRange = aiPlayer.unit?.range || 2;
-  const minPierce = aiPlayer.unit?.minTierToPierceWalls ?? 99;
-  
-  const tilesToEvaluate = [
-      { ...aiPlayer.position, costInAp: 0 } as ReachableTile, 
-      ...reachable
-  ];
-
+  const tilesToEvaluate = [{ ...aiPlayer.position, costInAp: 0 } as ReachableTile, ...reachable];
   let bestTile = tilesToEvaluate[0];
   let bestScore = -99999;
 
-  // Strategy Flags
-  const wantsHighGround = config.archetype === AIArchetype.STRATEGIST || config.archetype === AIArchetype.TURTLE;
-  const wantsCover = config.archetype === AIArchetype.TURTLE || config.archetype === AIArchetype.STRATEGIST;
-  const isBlocker = config.archetype === AIArchetype.TURTLE || config.archetype === AIArchetype.STRATEGIST;
-
-  // Tactical Body Blocking Pre-calc
-  const blockingPoints = new Set<string>();
-  if (isBlocker) {
-      const thresholds: Position[] = [];
-      activeMap.tiles.forEach((row, y) => row.forEach((t, x) => {
-          if (t === TileType.THRESHOLD) thresholds.push({x, y});
-      }));
-
-      if (thresholds.length > 0) {
-          let closestT = thresholds[0];
-          let minD = 999;
-          thresholds.forEach(t => {
-             const d = getManhattanDistance(target.position, t);
-             if(d < minD) { minD = d; closestT = t; }
-          });
-          const enemyPath = findPath(target.position, closestT, activeMap, []); 
-          enemyPath.forEach(p => blockingPoints.add(`${p.x},${p.y}`));
-      }
-  }
+  // Aegis Passive: Inertia
+  const hasInertia = aiPlayer.unit?.type === UnitType.AEGIS;
+  
+  const combatReserve = 10; // Minimum AP AI tries to keep for actions
 
   tilesToEvaluate.forEach(tile => {
       let score = 0;
       const dToTarget = getManhattanDistance(tile, target.position);
       const tileType = activeMap.tiles[tile.y][tile.x];
-
-      // A. Range Scoring
-      if (config.archetype === AIArchetype.AGGRO) {
-          if (dToTarget <= 1) score += 50;
-          else score -= dToTarget * 10;
-      } else if (config.archetype === AIArchetype.TURTLE) {
-          if (dToTarget <= unitRange) score += 20;
-          else score -= dToTarget * 5;
-      } else {
-          // Strategist: Kite
-          if (dToTarget === unitRange) score += 60; 
-          else if (dToTarget < unitRange && unitRange > 2) score -= (unitRange - dToTarget) * 10; 
-          else if (dToTarget > unitRange) score -= dToTarget * 5; 
-      }
-
-      // B. Terrain
-      if (tileType === TileType.THRESHOLD) score += 150; 
-      if (tileType === TileType.HIGH_GROUND && wantsHighGround) score += 25;
-      if (tileType === TileType.TOXIC) score -= 200; 
-
-      // C. Cover
-      if (wantsCover && getCoverStatus(target.position, tile, activeMap)) {
-          score += 40;
-      }
-
-      // D. Body Blocking
-      const isBlocking = blockingPoints.has(`${tile.x},${tile.y}`);
-      if (isBlocking) {
-          if (config.archetype === AIArchetype.TURTLE) score += 100;
-          if (config.archetype === AIArchetype.STRATEGIST) score += 50;
-      }
-
-      // E. Hard LOS
-      const remainingForAttack = aiPlayer.ap - tile.costInAp;
-      const potentialTier = getMaxTier(remainingForAttack);
-      const canIgnoreWalls = potentialTier >= minPierce;
-
-      if (dToTarget <= unitRange) {
-          const obstacles = getObstaclesInLine(tile, target.position, activeMap);
-          if (obstacles > 0 && !canIgnoreWalls) {
-              score -= 100;
+      
+      // 1. Objective Scoring (The Hook)
+      if (context.winCondition === WinCondition.CONTROL) {
+          // ANY Threshold tile is good
+          if (tileType === TileType.THRESHOLD) {
+              score += 150; // MASSIVE bonus for holding the point
+          } else if (context.thresholdPos) {
+              // Gravitate towards center of zone
+              const dToPoint = getManhattanDistance(tile, context.thresholdPos);
+              score -= dToPoint * 8;
           }
       }
 
-      // F. Efficiency
-      score -= tile.costInAp * 2;
+      // 2. Lethality Scoring
+      if (dToTarget <= unitRange) score += 60;
+      if (tileType === TileType.HIGH_GROUND) score += 25; // High ground advantage
       
-      // G. Stickiness
-      if (tile.x === aiPlayer.position.x && tile.y === aiPlayer.position.y) {
-          if (isBlocking) score += 50; 
-          else score += 5; 
+      // 3. Survivability Scoring
+      if (getCoverStatus(target.position, tile, activeMap)) score += 35;
+      if (tileType === TileType.TOXIC) score -= 100;      // Don't stand in acid
+      if (tileType === TileType.DEBRIS) score -= 15;      // Rubble is risky
+
+      // 4. "The Snap" - Collision Awareness (Scaled)
+      const estimatedAp = 15 + (round * 2); // Scale budget guess with game time
+
+      opponents.forEach(opp => {
+          const oppSpeed = (opp.unit?.speed || 1.0);
+          const oppCost = Math.round(BASE_MOVE_COST / oppSpeed);
+          const dToTile = getManhattanDistance(opp.position, tile);
+          
+          // Estimate if enemy can reach this tile
+          const canReach = (dToTile * oppCost) <= estimatedAp; 
+          
+          if (canReach) {
+              // Collision Risk Calculation
+              if (hasInertia) {
+                  // I am The Wall. I want to collide.
+                  score += 40; 
+              } else if (unitSpeed > oppSpeed) {
+                  // I am faster. I take the tile and damage them.
+                  score += 20;
+              } else if (unitSpeed < oppSpeed) {
+                  // I am slower. I will be displaced and take damage.
+                  score -= 80; 
+              } else {
+                  // Tie. Crash.
+                  score -= 40;
+              }
+          }
+      });
+
+      // 5. Distance Pressure
+      if (config.archetype === AIArchetype.AGGRO) {
+          score -= dToTarget * 5; 
+      } else if (config.archetype === AIArchetype.TURTLE) {
+          // Turtles prefer cover heavily
+          if (getCoverStatus(target.position, tile, activeMap)) score += 20;
       }
 
-      // H. Flanking & Spacing
-      if (teammates.length > 0) {
-          let crowdingPenalty = 0;
-          let flankingBonus = 0;
-          const isHard = config.difficulty === AIDifficulty.HARD;
-          const isEasy = config.difficulty === AIDifficulty.EASY;
-
-          teammates.forEach(tm => {
-              const dToTeammate = getManhattanDistance(tile, tm.position);
-              
-              if (dToTeammate <= 1) crowdingPenalty += 40;
-              else if (dToTeammate <= 2) crowdingPenalty += 10;
-
-              const vecTm = { x: tm.position.x - target.position.x, y: tm.position.y - target.position.y };
-              const vecMe = { x: tile.x - target.position.x, y: tile.y - target.position.y };
-              const dot = (vecTm.x * vecMe.x) + (vecTm.y * vecMe.y);
-              
-              if (dot < 0) flankingBonus += isHard ? 35 : isEasy ? 10 : 25; 
-              else if (dot > 0) flankingBonus -= 10; 
-          });
-
-          score -= Math.min(crowdingPenalty, 150);
-          score += flankingBonus;
+      // 6. Efficiency & Budgeting
+      score -= tile.costInAp * 2.0; // Increased penalty for moving far
+      
+      // Combat Reserve Check: Penalize moves that drain the ability to fight
+      if (aiPlayer.ap - tile.costInAp < combatReserve) {
+          score -= 40;
       }
 
       if (score > bestScore) {
@@ -327,99 +291,97 @@ function allocateActionPoints(
   config: any,
   activeMap: GridMap,
   observableIntents: TurnData[],
-  imminentDeath: boolean
+  imminentDeath: boolean,
+  unitSpeed: number,
+  round: number,
+  teammates: Player[],
+  history: TurnData[][]
 ): { attackAp: number, blockAp: number, isDesperation?: boolean } {
-
-  const isLowHp = aiPlayer.hp < aiPlayer.maxHp * 0.15;
-  if ((isLowHp || imminentDeath) && !aiPlayer.desperationUsed && aiPlayer.unit) {
-      return { blockAp: 0, attackAp: 0, isDesperation: true };
-  }
 
   const moveAp = bestTile.costInAp;
   const remainingAp = aiPlayer.ap - moveAp;
   
+  // Desperation Check
+  if (aiPlayer.hp < aiPlayer.maxHp * 0.15 && !aiPlayer.desperationUsed && aiPlayer.unit) {
+      return { blockAp: 0, attackAp: 0, isDesperation: true };
+  }
+
   let attackAp = 0;
   let blockAp = 0;
 
-  const overheat = aiPlayer.blockFatigue || 0;
-  const needsToVent = overheat >= 3 && !imminentDeath; 
-  const canAfford = (tier: number, budget: number) => getCost(tier) <= budget;
+  // Initiative Check
+  const targetSpeed = (target.unit?.speed || 1.0);
+  const isFaster = unitSpeed > targetSpeed;
+
+  // Decision Logic
+  let desiredAttack = 0;
+  let desiredBlock = 0;
 
   if (config.archetype === AIArchetype.AGGRO) {
-      if (canAfford(3, remainingAp)) attackAp = 3;
-      else if (canAfford(2, remainingAp)) attackAp = 2;
-      else if (canAfford(1, remainingAp)) attackAp = 1;
-      
-      const afterAtk = remainingAp - (attackAp > 0 ? getCost(attackAp) : 0);
-      blockAp = needsToVent ? 0 : getMaxTier(afterAtk);
-
+      desiredAttack = getMaxTier(remainingAp, 'ATTACK');
+      const leftover = remainingAp - getCost(desiredAttack, 'ATTACK');
+      desiredBlock = getMaxTier(leftover, 'BLOCK');
   } else if (config.archetype === AIArchetype.TURTLE) {
-      const threatened = aiPlayer.hp < aiPlayer.maxHp * 0.5 || activeMap.tiles[bestTile.y][bestTile.x] === TileType.THRESHOLD;
-      const blockTarget = threatened ? 3 : 2;
-      const forceVent = needsToVent && aiPlayer.hp > 200; 
-
-      if (!forceVent) {
-          if (canAfford(blockTarget, remainingAp)) blockAp = blockTarget;
-          else if (canAfford(blockTarget - 1, remainingAp)) blockAp = blockTarget - 1;
-          else if (canAfford(1, remainingAp)) blockAp = 1;
-      }
-
-      const afterBlk = remainingAp - (blockAp > 0 ? getCost(blockAp) : 0);
-      attackAp = getMaxTier(afterBlk);
-
+      desiredBlock = getMaxTier(remainingAp, 'BLOCK');
+      const leftover = remainingAp - getCost(desiredBlock, 'BLOCK');
+      desiredAttack = getMaxTier(leftover, 'ATTACK');
   } else {
-      // STRATEGIST
-      if (needsToVent) {
-          attackAp = getMaxTier(remainingAp);
-          blockAp = 0;
+      // Balanced
+      if (imminentDeath || !isFaster) {
+          // If slow or dying, prioritize block
+          desiredBlock = (remainingAp >= getCost(2, 'BLOCK')) ? 2 : getMaxTier(remainingAp, 'BLOCK');
+          const leftover = remainingAp - getCost(desiredBlock, 'BLOCK');
+          desiredAttack = getMaxTier(leftover, 'ATTACK');
       } else {
-          if (remainingAp >= 6) { attackAp = 2; blockAp = 2; } 
-          else if (remainingAp >= 4) { attackAp = 2; blockAp = 1; }
-          else if (remainingAp >= 2) { attackAp = 1; blockAp = 1; } 
-          else { attackAp = getMaxTier(remainingAp); }
-          
-          // Banking Logic
-          if (blockAp === 1 && !isLowHp) {
-              const isInCover = getCoverStatus(target.position, bestTile, activeMap);
-              if (isInCover) {
-                  blockAp = 0;
-              }
-          }
+          // If faster and safe, punish
+          desiredAttack = getMaxTier(remainingAp, 'ATTACK');
+          const leftover = remainingAp - getCost(desiredAttack, 'ATTACK');
+          desiredBlock = getMaxTier(leftover, 'BLOCK');
       }
   }
 
-  // Blackout Counter-Bait
-  if (observableIntents.length > 0) {
-      const incoming = observableIntents.find(i => i.playerId === target.id);
-      if (incoming) {
-          if (incoming.action.blockAp >= 3) {
-              attackAp = 0; 
-              const currentSpend = moveAp;
-              const bank = aiPlayer.ap - currentSpend;
-              if (!needsToVent) blockAp = getMaxTier(bank);
+  // --- OVER-COMMIT PROTECTION ---
+  const projectedTeammateDmg = teammates.reduce((acc, tm) => {
+      const tmLastTarget = getLastTargetId(tm.id, history);
+      if (tmLastTarget === target.id && (tm.unit?.speed || 1) > unitSpeed) {
+          return acc + 150; // Average damage estimate
+      }
+      return acc;
+  }, 0);
+
+  if (target.hp - projectedTeammateDmg <= 0 && desiredAttack > 1) {
+      // Target likely dead, save AP or just tap
+      attackAp = 1;
+      // Re-allocate to block with freed AP
+      const apAfterWeakAttack = remainingAp - getCost(1, 'ATTACK');
+      blockAp = getMaxTier(apAfterWeakAttack, 'BLOCK');
+  } else {
+      attackAp = desiredAttack;
+      blockAp = desiredBlock;
+  }
+
+  // --- ANTI-VENTING LOGIC ---
+  const incomeResult = calculateIncome(0, round + 1); 
+  const currentTotalCost = getCost(attackAp, 'ATTACK') + getCost(blockAp, 'BLOCK');
+  const estimatedNextTurnAp = (remainingAp - currentTotalCost) + incomeResult.total;
+  
+  if (estimatedNextTurnAp > MAX_AP) {
+      // Try upgrade Block
+      if (blockAp < 3) {
+          const costDiff = getCost(blockAp + 1, 'BLOCK') - getCost(blockAp, 'BLOCK');
+          if (remainingAp - currentTotalCost >= costDiff) {
+              blockAp++;
           }
-          else if (incoming.action.attackAp >= 2) {
-              if (!needsToVent) blockAp = Math.min(3, getMaxTier(remainingAp));
-              const leftover = remainingAp - (blockAp > 0 ? getCost(blockAp) : 0);
-              attackAp = getMaxTier(leftover);
+      }
+      // Try upgrade Attack
+      if (attackAp < 3) {
+          const newBlockCost = getCost(blockAp, 'BLOCK'); // Updated block cost
+          const costDiff = getCost(attackAp + 1, 'ATTACK') - getCost(attackAp, 'ATTACK');
+          if (remainingAp - (newBlockCost + getCost(attackAp, 'ATTACK')) >= costDiff) {
+              attackAp++;
           }
       }
   }
 
   return { attackAp, blockAp };
-}
-
-function decideAbilityUsage(aiPlayer: Player, config: any, difficulty: DifficultyLevel): boolean {
-  if (!aiPlayer.activeUsed && aiPlayer.cooldown <= 0) {
-      let abilityChance = 0.2; // Base Normal
-      
-      if (config.difficulty === AIDifficulty.EASY) abilityChance = 0.1;
-      else if (config.difficulty === AIDifficulty.HARD) abilityChance = 0.4;
-
-      if (difficulty === DifficultyLevel.BLACKOUT) abilityChance += 0.2;
-      if (difficulty === DifficultyLevel.OVERCLOCK) abilityChance += 0.1;
-
-      return Math.random() < abilityChance;
-  }
-  return false;
 }

@@ -1,405 +1,343 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ScreenWrapper } from '../layout/ScreenWrapper';
 import { GlobalHeader } from '../layout/GlobalHeader';
 import { Button } from '../ui/Button';
-import { Skull, Shield, Zap, TrendingUp, Cpu, Move, Activity, Ghost, Crosshair, Droplets, Flame, ShieldAlert, Eye, EyeOff, ChevronUp, Info, Calculator, AlertOctagon, Map as MapIcon, ChevronLeft, ChevronRight, Target } from 'lucide-react';
-import { ActionType, Phase, UnitType } from '../../types';
-import { DefenseDisplay } from './DefenseDisplay';
-import { BattleStage } from './BattleStage';
+import { Play, Pause, RotateCcw, ChevronRight, Zap, Target, Shield, Skull, Crosshair, Map as MapIcon, Footprints, Wind } from 'lucide-react';
+import { Phase, ActionType, DamageType, TileType } from '../../types';
+import { GRID_SIZE } from '../../constants';
 import { TacticalGrid } from '../tactical/TacticalGrid';
-import { THRESHOLD_WIN_TURNS } from '../../constants';
 
 interface ResolutionViewProps {
   game: any;
 }
 
 export const ResolutionView: React.FC<ResolutionViewProps> = ({ game }) => {
-  const { resolutionLogs, round, nextTurn, visualLevel, credits, phaseTransition, tutorial, setTutorial } = game;
-  const [visibleCount, setVisibleCount] = useState(0);
-  const [isDone, setIsDone] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(800); 
-  const [showMap, setShowMap] = useState(false); // Toggle state
-  const [activeEnemyIndex, setActiveEnemyIndex] = useState(0); // For multi-enemy viewing
+  const { resolutionLogs, round, nextTurn, visualLevel, credits, prevPlayers, players, activeMap, tutorial } = game;
+  const [step, setStep] = useState(0); // 0: Init, 1: Move, 2: Action (Seq), 3: End
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [activeLogIndex, setActiveLogIndex] = useState(-1);
+  const [playbackSpeed, setPlaybackSpeed] = useState(800);
+  
+  // 1. Track visual HP per player
+  const [visualHps, setVisualHps] = useState<Record<string, number>>({});
 
-  // Sheet State
-  const [isSheetExpanded, setIsSheetExpanded] = useState(false);
-  const touchStartY = useRef(0);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // Filter logs for combat phase (Attack/Intercept)
+  const combatLogs = resolutionLogs.filter((l: any) => 
+    l.type === ActionType.ATTACK || 
+    l.type === ActionType.INTERCEPT
+  );
 
-  // Animation State
-  const [stageLeftId, setStageLeftId] = useState<string | null>(null);
-  const [stageRightId, setStageRightId] = useState<string | null>(null);
-  const [animState, setAnimState] = useState<{left: 'idle'|'attack'|'hit'|'faint', right: 'idle'|'attack'|'hit'|'faint'}>({ left: 'idle', right: 'idle' });
+  // Filter logs for end phase (Venting, Hazards)
+  const endLogs = resolutionLogs.filter((l: any) => 
+    l.type === ActionType.VENT || 
+    l.type === ActionType.BOUNTY
+  );
 
-  // Filter enemies
-  const enemies = game.players.filter((p: any) => p.isAI || p.id !== game.players[0].id);
-  const activeEnemy = enemies[activeEnemyIndex] || enemies[0];
-  const humanPlayer = game.players.find((p: any) => !p.isAI) || game.players[0];
-
+  // 2. Initialize visual HPs when playback starts or restarts
   useEffect(() => {
-    setStageLeftId(humanPlayer.id);
-    setStageRightId(activeEnemy?.id);
-  }, [activeEnemyIndex]);
+    const initialHps: Record<string, number> = {};
+    prevPlayers.forEach((p: any) => initialHps[p.id] = p.hp);
+    setVisualHps(initialHps);
+  }, [prevPlayers]);
 
+  // 3. Update HP only when a log hits
   useEffect(() => {
-    if (visibleCount < resolutionLogs.length) {
-      const timer = setTimeout(() => {
-        const log = resolutionLogs[visibleCount];
-        const actorId = log.attackerId;
-        const targetId = log.targetId;
-
-        // Auto-switch view to relevant actors
-        if (actorId && actorId !== humanPlayer.id) {
-           const idx = enemies.findIndex((e: any) => e.id === actorId);
-           if (idx !== -1) setActiveEnemyIndex(idx);
-        } else if (targetId && targetId !== humanPlayer.id) {
-           const idx = enemies.findIndex((e: any) => e.id === targetId);
-           if (idx !== -1) setActiveEnemyIndex(idx);
-        }
-
-        let nextAnim = { left: 'idle', right: 'idle' } as any;
-
-        if (log.type === ActionType.ATTACK) {
-             if (actorId === humanPlayer.id) nextAnim.left = 'attack';
-             if (actorId === activeEnemy.id) nextAnim.right = 'attack';
-             
-             if (targetId && log.damage > 0) {
-                 if (targetId === humanPlayer.id) nextAnim.left = 'hit';
-                 if (targetId === activeEnemy.id) nextAnim.right = 'hit';
-             }
-        }
-        
-        const targetPlayer = game.players.find((p:any) => p.id === targetId);
-        if (targetPlayer && targetPlayer.hp <= 0) {
-            if (targetId === humanPlayer.id) nextAnim.left = 'faint';
-            if (targetId === activeEnemy.id) nextAnim.right = 'faint';
-        }
-
-        setAnimState(nextAnim);
-
-        setTimeout(() => {
-             setAnimState(prev => {
-                const l = prev.left === 'faint' ? 'faint' : 'idle';
-                const r = prev.right === 'faint' ? 'faint' : 'idle';
-                return { left: l, right: r };
-             });
-        }, 500);
-
-        setVisibleCount(prev => prev + 1);
-        if (game.playSfx) game.playSfx('beep');
-      }, playbackSpeed); 
-      return () => clearTimeout(timer);
-    } else {
-      setIsDone(true);
-      if (tutorial.isActive && tutorial.step === 5 && game.currentCampaignLevelId === 'C1-L1') {
-         setTutorial((prev: any) => ({ ...prev, step: 6 }));
-         setIsSheetExpanded(true);
+    if (step === 2 && activeLogIndex >= 0) {
+      const log = combatLogs[activeLogIndex];
+      if (log.damage > 0 && log.targetId) {
+        setVisualHps(prev => ({
+          ...prev,
+          [log.targetId!]: Math.max(0, (prev[log.targetId!] || 0) - log.damage)
+        }));
       }
+    } else if (step === 0) {
+       // Reset visual HP on step 0
+       const initialHps: Record<string, number> = {};
+       prevPlayers.forEach((p: any) => initialHps[p.id] = p.hp);
+       setVisualHps(initialHps);
     }
-  }, [visibleCount, resolutionLogs, playbackSpeed, activeEnemy, enemies, humanPlayer.id, tutorial.isActive]);
+  }, [activeLogIndex, step, combatLogs, prevPlayers]);
 
+  // Playback Loop
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    let timer: any;
+    if (isPlaying) {
+        if (step === 0) {
+            // Init -> Move
+            timer = setTimeout(() => setStep(1), 500);
+        } else if (step === 1) {
+            // Move -> Combat
+            timer = setTimeout(() => {
+                setStep(2);
+                setActiveLogIndex(-1);
+            }, 1500); 
+        } else if (step === 2) {
+            // Combat Sequence
+            if (activeLogIndex < combatLogs.length - 1) {
+                timer = setTimeout(() => {
+                    setActiveLogIndex(prev => prev + 1);
+                }, playbackSpeed);
+            } else {
+                // Combat Done -> End
+                timer = setTimeout(() => setStep(3), 1000);
+            }
+        } else if (step === 3) {
+            // Stop
+            setIsPlaying(false);
+        }
     }
-  }, [visibleCount]);
+    return () => clearTimeout(timer);
+  }, [isPlaying, step, activeLogIndex, playbackSpeed, combatLogs.length]);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY;
+  // Auto-start
+  useEffect(() => {
+    const t = setTimeout(() => setIsPlaying(true), 500);
+    return () => clearTimeout(t);
+  }, []);
+
+  const getPlayerState = (playerId: string) => {
+    const start = prevPlayers.find((p: any) => p.id === playerId);
+    const end = players.find((p: any) => p.id === playerId);
+    return { start, end };
   };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const deltaY = touchStartY.current - e.changedTouches[0].clientY;
-    if (Math.abs(deltaY) > 50) {
-      if (deltaY > 0) setIsSheetExpanded(true);
-      else setIsSheetExpanded(false); 
-    }
+  const renderPlaybackGrid = () => {
+    return (
+      <div className="relative w-full h-full select-none">
+        {/* Base Grid */}
+        <div 
+          className="grid gap-1 w-full h-full absolute inset-0"
+          style={{ gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))` }}
+        >
+          {activeMap.tiles.map((row: any[], y: number) => 
+            row.map((type: TileType, x: number) => {
+              let bgClass = 'bg-slate-900/40 border-slate-800/30';
+              if (type === TileType.OBSTACLE) bgClass = 'bg-slate-950 border-slate-900';
+              if (type === TileType.HIGH_GROUND) bgClass = 'bg-sky-900/10 border-sky-900/20';
+              if (type === TileType.TOXIC) bgClass = 'bg-lime-900/10 border-lime-900/20';
+              if (type === TileType.DEBRIS) bgClass = 'bg-amber-950/40 border-amber-900/40';
+              
+              return (
+                <div key={`${x}-${y}`} className={`border rounded-sm ${bgClass} flex items-center justify-center relative`}>
+                   {type === TileType.OBSTACLE && <div className="w-2 h-2 bg-slate-800 rounded-full"></div>}
+                   {type === TileType.DEBRIS && <div className="w-full h-full opacity-30 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxwYXRoIGQ9Ik0wIDBMOCA4Wk04IDBMMCA4WiIgc3Ryb2tlPSIjY2MyYjViIiBzdHJva2Utd2lkdGg9IjEiLz48L3N2Zz4=')]"></div>}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Dynamic Layer */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none z-10 overflow-visible">
+           <defs>
+              <marker id="arrowHeadRed" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                 <path d="M0,0 L0,6 L6,3 z" fill="#ef4444" />
+              </marker>
+              <marker id="arrowHeadAmber" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                 <path d="M0,0 L0,6 L6,3 z" fill="#f59e0b" />
+              </marker>
+           </defs>
+
+           {/* Active Shot Line (Only during specific log index in Step 2) */}
+           {step === 2 && activeLogIndex >= 0 && combatLogs[activeLogIndex] && (() => {
+              const log = combatLogs[activeLogIndex];
+              if (log.originPoint && log.impactPoint && !log.resultMessage.includes("NEUTRALIZED")) {
+                 const x1 = (log.originPoint.x * (100 / GRID_SIZE)) + (50 / GRID_SIZE);
+                 const y1 = (log.originPoint.y * (100 / GRID_SIZE)) + (50 / GRID_SIZE);
+                 const x2 = (log.impactPoint.x * (100 / GRID_SIZE)) + (50 / GRID_SIZE);
+                 const y2 = (log.impactPoint.y * (100 / GRID_SIZE)) + (50 / GRID_SIZE);
+                 
+                 const color = log.type === ActionType.INTERCEPT ? '#f59e0b' : '#ef4444'; 
+                 const marker = log.type === ActionType.INTERCEPT ? 'url(#arrowHeadAmber)' : 'url(#arrowHeadRed)';
+
+                 return (
+                    <g key={`shot-${activeLogIndex}`}>
+                       <line 
+                          x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} 
+                          stroke={color} strokeWidth="3" markerEnd={marker} strokeDasharray="4,2"
+                          className="animate-draw-line"
+                       />
+                       <circle cx={`${x1}%`} cy={`${y1}%`} r="2" fill="white" className="animate-ping" />
+                       <circle cx={`${x2}%`} cy={`${y2}%`} r="4" fill={color} className="animate-ping [animation-duration:0.5s]" />
+                    </g>
+                 );
+              }
+              return null;
+           })()}
+        </svg>
+
+        {/* Players */}
+        {players.map((p: any) => {
+           const { start, end } = getPlayerState(p.id);
+           if (!start) return null;
+
+           // Visual State Calculation
+           const currentPos = step === 0 ? start.position : end.position;
+           const isEliminated = end.isEliminated; // Check final state
+           
+           // Is currently involved in active log?
+           const activeLog = (step === 2 && activeLogIndex >= 0) ? combatLogs[activeLogIndex] : null;
+           const isTargetOfActive = activeLog?.targetId === p.id;
+           const isAttackerOfActive = activeLog?.attackerId === p.id;
+           const isNeutralized = activeLog?.resultMessage.includes("NEUTRALIZED") && isAttackerOfActive;
+           const damageTaken = isTargetOfActive ? (activeLog.damage || 0) : 0;
+           
+           // Venting in Step 3
+           const ventLog = endLogs.find((l: any) => l.type === ActionType.VENT && l.attackerId === p.id);
+           
+           // Only show elimination grayscale in step 3 or if they are dead and NOT active
+           const showDead = isEliminated && step === 3;
+
+           const xPct = (currentPos.x * (100 / GRID_SIZE));
+           const yPct = (currentPos.y * (100 / GRID_SIZE));
+           
+           const isAI = p.isAI;
+           const colorClass = isAI ? 'bg-red-500 border-red-400' : 'bg-teal-500 border-teal-400';
+           
+           // Determine HP for Bar
+           const currentHp = visualHps[p.id] !== undefined ? visualHps[p.id] : start.hp;
+
+           return (
+              <div 
+                 key={p.id}
+                 className={`absolute w-[12%] h-[12%] transition-all duration-700 ease-in-out flex flex-col items-center justify-center z-20 ${showDead ? 'opacity-40 grayscale' : ''}`}
+                 style={{ left: `${xPct}%`, top: `${yPct}%`, width: `${100/GRID_SIZE}%`, height: `${100/GRID_SIZE}%` }}
+              >
+                 {/* Neutralized Text */}
+                 {step === 2 && isNeutralized && (
+                    <div className="absolute -top-8 bg-black/80 text-slate-400 text-[6px] font-black uppercase px-2 py-1 rounded border border-slate-700 animate-bounce">
+                       NEUTRALIZED
+                    </div>
+                 )}
+
+                 {/* Unit Icon */}
+                 <div className={`w-8 h-8 rounded-full border-2 ${colorClass} flex items-center justify-center shadow-lg relative ${damageTaken > 0 ? 'animate-shake-hit' : ''}`}>
+                    <span className="text-[8px] font-black text-black">{p.name.slice(0, 2)}</span>
+                    
+                    {/* Active Action Indicator */}
+                    {isAttackerOfActive && !isNeutralized && (
+                       <div className="absolute -inset-2 border-2 border-white rounded-full animate-ping opacity-50"></div>
+                    )}
+
+                    {/* Damage Popup */}
+                    {step === 2 && damageTaken > 0 && (
+                       <div className="absolute -top-6 bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded animate-bounce z-50 shadow-lg">
+                          -{damageTaken}
+                       </div>
+                    )}
+                    
+                    {/* Shield Popup */}
+                    {step === 2 && isTargetOfActive && activeLog.shield > 0 && (
+                       <div className="absolute -bottom-2 -right-2 bg-sky-500 text-black p-1 rounded-full animate-in zoom-in z-50 border border-white">
+                          <Shield size={10} />
+                       </div>
+                    )}
+
+                    {/* Venting Visual */}
+                    {step === 3 && ventLog && (
+                       <div className="absolute -top-8 flex flex-col items-center animate-float">
+                          <Wind size={14} className="text-amber-500 mb-1"/>
+                          <div className="text-[8px] font-mono text-amber-500 bg-black/80 px-1 rounded border border-amber-500/30">VENT</div>
+                       </div>
+                    )}
+                 </div>
+                 
+                 {/* Health Bar (Smoothed via visualHps) */}
+                 <div className="w-10 h-1 bg-slate-800 mt-1 rounded-full overflow-hidden border border-black/50">
+                    <div 
+                       className={`h-full transition-all duration-300 ${p.isAI ? 'bg-red-500' : 'bg-teal-500'}`} 
+                       style={{ width: `${(currentHp / p.maxHp) * 100}%` }} 
+                    />
+                 </div>
+              </div>
+           );
+        })}
+      </div>
+    );
   };
 
-  const getPlayerName = (id?: string) => game.players.find((p: any) => p.id === id)?.name || "SYSTEM";
+  const renderLogList = () => (
+     <div className="space-y-2 mt-4 relative">
+        {resolutionLogs.map((log: any, i: number) => {
+           const isIntercept = log.type === ActionType.INTERCEPT;
+           const isAttack = log.type === ActionType.ATTACK;
+           const isCrit = log.resultMessage.includes('CRIT') || log.damage > 300;
+           const isVent = log.type === ActionType.VENT;
+           const isActive = i === activeLogIndex && step === 2; // Highlight active log
+           
+           if (!isAttack && !isIntercept && log.type !== ActionType.BLOCK && log.type !== ActionType.COLLISION && !isVent) return null;
 
-  const getOperativeFX = (unitType: string, isAbility: boolean) => {
-    const base = "border-slate-800 bg-slate-900/60";
-    if (!unitType) return base;
-    switch (unitType) {
-      case UnitType.GHOST: return "border-purple-500/50 bg-purple-500/5 shadow-[0_0_15px_rgba(168,85,247,0.1)] opacity-80";
-      case UnitType.TROJAN: return "border-lime-500/50 bg-lime-500/5 shadow-[inset_0_0_10px_rgba(132,204,22,0.1)]";
-      case UnitType.LEECH: return "border-red-600/50 bg-red-950/20 animate-pulse";
-      case UnitType.AEGIS: return "border-blue-400/50 bg-blue-500/10 scale-[1.01]";
-      case UnitType.PYRUS: return "border-orange-500/50 bg-orange-500/5 shadow-[0_0_15px_rgba(249,115,22,0.1)]";
-      case UnitType.KILLSHOT: return "border-amber-400/50 bg-amber-400/5";
-      default: return base;
-    }
-  };
-
-  const getOperativeIcon = (unitType: string, defaultIcon: React.ReactNode) => {
-    switch (unitType) {
-      case UnitType.GHOST: return <Ghost size={20} />;
-      case UnitType.HUNTER: return <Crosshair size={20} />;
-      case UnitType.LEECH: return <Droplets size={20} />;
-      case UnitType.PYRUS: return <Flame size={20} />;
-      case UnitType.AEGIS: return <ShieldAlert size={20} />;
-      default: return defaultIcon;
-    }
-  };
-
-  const cycleEnemy = (dir: number) => {
-      let next = activeEnemyIndex + dir;
-      if (next < 0) next = enemies.length - 1;
-      if (next >= enemies.length) next = 0;
-      setActiveEnemyIndex(next);
-      if (game.playSfx) game.playSfx('confirm');
-  };
+           return (
+              <div 
+                key={i} 
+                className={`p-2 rounded-lg border flex items-center justify-between text-[9px] font-mono transition-all duration-300
+                  ${isActive ? 'scale-105 border-white shadow-lg z-10' : 'opacity-80'}
+                  ${isIntercept ? 'bg-amber-950/30 border-amber-900/50' : 
+                    isCrit ? 'bg-red-950/30 border-red-900/50' : 
+                    isVent ? 'bg-amber-900/10 border-amber-800/30 text-amber-500' :
+                    'bg-slate-900 border-slate-800'}`}
+              >
+                 <div className="flex items-center gap-2">
+                    {isIntercept ? <Footprints size={12} className="text-amber-500"/> : 
+                     isAttack ? <Crosshair size={12} className="text-red-500"/> : 
+                     isVent ? <Wind size={12} className="text-amber-500"/> :
+                     <Shield size={12} className="text-sky-500"/>}
+                    <span className="text-slate-300">{log.resultMessage}</span>
+                 </div>
+                 {log.damage > 0 && <span className="text-red-400 font-bold">-{log.damage}</span>}
+              </div>
+           );
+        })}
+        {resolutionLogs.length === 0 && <div className="text-center text-slate-600 text-[10px] italic py-4">No significant combat events.</div>}
+     </div>
+  );
 
   return (
     <ScreenWrapper visualLevel={visualLevel} noScroll centerContent={false}>
-      <GlobalHeader 
-        phase={Phase.RESOLUTION} 
-        onHelp={() => game.setIsHelpOpen(true)} 
-        onSettings={() => game.setIsSettingsOpen(true)} 
-        onExit={() => game.setIsExitConfirming(true)} 
-        credits={credits} 
-      />
+      <GlobalHeader phase={Phase.RESOLUTION} onHelp={() => game.setIsHelpOpen(true)} onSettings={() => game.setIsSettingsOpen(true)} onExit={() => game.setIsExitConfirming(true)} credits={credits} />
       
-      {/* Speed Controls & Map Toggle (Floating) */}
-      <div className="fixed top-24 right-4 z-30 flex flex-col gap-2 items-end">
-        <button 
-          onClick={() => setShowMap(!showMap)}
-          className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase flex items-center gap-2 border shadow-lg transition-all ${showMap ? 'bg-sky-500 text-black border-sky-400' : 'bg-black/80 border-slate-700 text-slate-400'}`}
-        >
-          <MapIcon size={14} /> {showMap ? 'HIDE MAP' : 'VIEW MAP'}
-        </button>
-        
-        {!isDone && (
-          <button 
-            onClick={() => setPlaybackSpeed(100)}
-            className="bg-black/90 border border-teal-500/40 px-4 py-2 rounded-full text-[10px] font-mono text-teal-400 animate-pulse flex items-center gap-2 hover:bg-teal-900/20 transition-colors shadow-lg"
-          >
-            <Zap size={12} /> OVERCLOCK
-          </button>
-        )}
-      </div>
-
-      {/* Capture Progress Overlay */}
-      {humanPlayer.captureTurns > 0 && (
-         <div className="fixed top-24 left-4 z-30 bg-black/80 border border-amber-500/50 p-3 rounded-xl flex items-center gap-3">
-             <Target size={16} className="text-amber-500 animate-pulse"/>
-             <div>
-                <div className="text-[8px] font-black uppercase text-amber-500">Capture Protocol</div>
-                <div className="flex gap-1 mt-1">
-                   {[...Array(THRESHOLD_WIN_TURNS)].map((_, i) => (
-                      <div key={i} className={`w-3 h-1 rounded-sm ${i < humanPlayer.captureTurns ? 'bg-amber-500' : 'bg-slate-700'}`}></div>
-                   ))}
-                </div>
-             </div>
-         </div>
-      )}
-
-      {/* Main Visual Layer */}
-      <div className="absolute inset-0 top-0 z-0">
-        {showMap ? (
-           <div className="w-full h-full flex flex-col items-center justify-center bg-[#050b14] pt-20 pb-40">
-              <TacticalGrid 
-                 map={game.activeMap}
-                 players={game.players}
-                 currentPlayerId={stageLeftId || ""}
-                 reachableTiles={[]}
-                 onTileClick={() => {}}
-              />
-              <div className="text-[9px] font-mono text-slate-500 mt-4 uppercase animate-pulse">Live Tactical Feed</div>
-           </div>
-        ) : (
-           <div className="w-full h-full relative">
-              <BattleStage 
-                leftPlayer={humanPlayer} 
-                rightPlayer={activeEnemy} 
-                animState={animState}
-                variant="perspective"
-                className="w-full h-full"
-              />
-              
-              {/* Multi-Enemy Controls */}
-              {enemies.length > 1 && (
-                  <div className="absolute top-[20%] right-4 z-40 flex flex-col items-center gap-2">
-                     <button onClick={() => cycleEnemy(-1)} className="p-2 bg-slate-900/80 border border-slate-700 rounded-lg hover:bg-slate-800 text-slate-400"><ChevronLeft size={16}/></button>
-                     <span className="text-[8px] font-mono text-slate-500 bg-black/50 px-2 py-1 rounded">{activeEnemyIndex+1}/{enemies.length}</span>
-                     <button onClick={() => cycleEnemy(1)} className="p-2 bg-slate-900/80 border border-slate-700 rounded-lg hover:bg-slate-800 text-slate-400"><ChevronRight size={16}/></button>
-                  </div>
-              )}
-           </div>
-        )}
-      </div>
-
-      {/* SWIPEABLE LOG SHEET */}
-      <div 
-         className={`absolute bottom-0 left-0 right-0 bg-[#0a0f1e]/95 backdrop-blur-2xl rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.6)] border-t border-slate-700/50 z-40 transition-all duration-500 ease-out flex flex-col`}
-         style={{ height: isSheetExpanded ? '85%' : '40%' }}
-      >
-         {/* Handle / Header Area */}
-         <div 
-            className="w-full shrink-0 pt-4 pb-2 px-6 cursor-grab active:cursor-grabbing bg-gradient-to-b from-[#0a0f1e] to-[#0a0f1e]/90"
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-            onClick={() => setIsSheetExpanded(!isSheetExpanded)}
-         >
-            <div className="w-16 h-1.5 bg-slate-700/50 rounded-full mx-auto mb-4"></div>
-            
-            <div className="text-center mb-2">
-               <div className="text-teal-500 font-mono text-[8px] uppercase tracking-[0.5em] mb-1 opacity-60">TACTICAL_SEQUENCE_RESOLVING</div>
-               <h2 className="text-2xl font-black uppercase text-white italic tracking-tighter">CYCLE {round - 1} REPORT</h2>
+      <div className="flex-1 flex flex-col p-4 w-full max-w-lg mx-auto">
+         {/* Phase Indicator */}
+         <div className="flex justify-between items-center mb-4 px-2">
+            <div className="text-[10px] font-black uppercase text-slate-500 tracking-widest">TACTICAL REPLAY // CYCLE {round-1}</div>
+            <div className="flex gap-1">
+               {[0, 1, 2, 3].map(s => (
+                  <div key={s} className={`w-8 h-1 rounded-full transition-colors ${step >= s ? 'bg-teal-500' : 'bg-slate-800'}`}></div>
+               ))}
             </div>
-
-            {!isSheetExpanded && (
-               <div className="text-center mt-2 animate-pulse">
-                  <span className="text-[9px] font-mono text-slate-500 uppercase tracking-[0.3em]">Swipe Up for Details</span>
-                  <ChevronUp size={16} className="mx-auto text-slate-600 mt-1" />
-               </div>
-            )}
          </div>
 
-         {/* Expanded Logs (Scrollable) */}
-         <div className="flex-1 overflow-y-auto custom-scrollbar px-4 sm:px-6 pb-24 space-y-3 relative">
-             {phaseTransition && (
-               <div className="w-full mb-4 bg-sky-500/10 border border-sky-500/30 p-3 rounded-2xl flex items-center gap-4 animate-in zoom-in duration-300">
-                  <TrendingUp size={16} className="text-sky-400" />
-                  <div className="text-[10px] font-mono text-white uppercase tracking-tight">{phaseTransition}</div>
-               </div>
-             )}
-             
-             <div ref={scrollRef} className="space-y-3">
-                {resolutionLogs.slice(0, visibleCount).map((log: any, i: number) => {
-                  const p = game.players.find((x: any) => x.id === (log.attackerId || log.playerId));
-                  const unitType = p?.unit?.type;
-                  const isAbility = log.type === ActionType.ABILITY;
-                  const isBlock = log.type === ActionType.BLOCK || log.type === ActionType.PHASE;
-                  const isAttack = log.type === ActionType.ATTACK;
-                  const isMove = log.type === ActionType.MOVE;
-                  const isDesperation = log.type === ActionType.DESPERATION;
-                  const isCollision = log.type === ActionType.COLLISION;
-                  const isCapture = log.type === ActionType.CAPTURE;
-                  
-                  const operativeFX = getOperativeFX(unitType, isAbility);
-                  const isCritical = log.damage > 400 || log.resultMessage?.includes("LETHAL") || isDesperation;
-
-                  return (
-                    <div 
-                      key={i} 
-                      className={`border p-3 rounded-2xl flex flex-col gap-2 animate-in slide-in-from-bottom-2 duration-200 relative overflow-hidden transition-all
-                        ${operativeFX}
-                        ${isCritical ? 'ring-2 ring-red-500/40' : ''}
-                        ${isDesperation ? 'bg-red-950/40 border-red-500/60' : ''}
-                        ${isCollision ? 'bg-amber-950/40 border-amber-500/60' : ''}`}
-                    >
-                       <div className="flex items-center gap-3 relative z-10">
-                           <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border transition-all
-                              ${isBlock ? 'bg-teal-500/10 text-teal-400 border-teal-500/30' : 
-                                isAttack ? 'bg-red-500/10 text-red-500 border-red-500/30' : 
-                                isMove ? 'bg-sky-500/10 text-sky-400 border-sky-500/30' :
-                                isDesperation ? 'bg-red-600 text-white animate-pulse' :
-                                isCollision ? 'bg-amber-500 text-black' :
-                                isCapture ? 'bg-amber-500/20 text-amber-500 border-amber-500' :
-                                'bg-amber-500/10 text-amber-500 border-amber-500/30'}`}>
-                              {isDesperation ? <AlertOctagon size={20} /> : 
-                               isCollision ? <AlertOctagon size={20} /> :
-                               isCapture ? <Target size={20} /> :
-                               getOperativeIcon(unitType, isBlock ? <Shield size={16} /> : isAttack ? <Skull size={16} /> : <Zap size={16} />)}
-                           </div>
-
-                           <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                              <div className="min-w-0">
-                                 <div className="text-[10px] font-black text-white uppercase tracking-tighter flex items-center gap-2">
-                                   {getPlayerName(log.attackerId)} 
-                                   {log.targetName && <span className="text-slate-500 font-mono text-[8px]">➔ {log.targetName}</span>}
-                                 </div>
-                                 <div className={`text-[8px] font-mono uppercase tracking-tight mt-0.5
-                                    ${isCritical ? 'text-red-400 font-bold' : isCollision ? 'text-amber-400 font-bold' : 'text-slate-400'}`}>
-                                    {log.resultMessage}
-                                 </div>
-                              </div>
-
-                              <div className="flex items-center gap-2 shrink-0">
-                                 {isMove && log.apSpent > 0 && (
-                                   <div className="bg-sky-500/20 border border-sky-500/40 px-2 py-0.5 rounded-lg flex flex-col items-center min-w-[35px]">
-                                      <span className="text-[6px] font-mono text-sky-400 uppercase leading-none mb-0.5">Energy</span>
-                                      <span className="text-[9px] font-black text-white leading-none">-{log.apSpent} AP</span>
-                                   </div>
-                                 )}
-                                 {(isAttack || isCollision) && log.damage !== undefined && (
-                                   <div className="bg-red-500/20 border border-red-500/40 px-2 py-0.5 rounded-lg flex flex-col items-center">
-                                      <span className="text-[6px] font-mono text-red-400 uppercase leading-none mb-0.5">Impact</span>
-                                      <span className="text-[9px] font-black text-red-400 leading-none">{log.damage}</span>
-                                   </div>
-                                 )}
-                                 {isAttack && log.shield > 0 && (
-                                   <div className="bg-teal-500/20 border border-teal-500/40 px-2 py-0.5 rounded-lg flex flex-col items-center">
-                                      <span className="text-[6px] font-mono text-teal-400 uppercase leading-none mb-0.5">Defended</span>
-                                      <span className="text-[9px] font-black text-white leading-none">{log.shield}</span>
-                                   </div>
-                                 )}
-                              </div>
-                           </div>
-                       </div>
-
-                       {/* Detailed Math Log */}
-                       {log.mathDetails && (
-                          <div className="mt-2 pt-2 border-t border-white/5 flex items-start gap-2">
-                             <Calculator size={10} className="text-slate-500 mt-0.5" />
-                             <div className="font-mono text-[7px] text-slate-500 break-all leading-tight tracking-wider">
-                                {log.mathDetails}
-                             </div>
-                          </div>
-                       )}
-
-                       {isBlock && log.defenseTier && (
-                         <div className="mt-1 border-t border-white/5 pt-2 animate-in fade-in duration-500">
-                            <DefenseDisplay 
-                                defenseTier={log.defenseTier} 
-                                isCracked={log.isCracked} 
-                                mitigationPercent={log.mitigationPercent}
-                                shieldHealth={log.shield}
-                            />
-                         </div>
-                       )}
-                    </div>
-                  );
-                })}
-
-                {!isDone && (
-                  <div className="p-6 border border-dashed border-slate-800 rounded-3xl opacity-30 flex flex-col items-center justify-center gap-2">
-                     <Cpu size={20} className="text-teal-500 animate-spin-slow" />
-                     <div className="flex gap-1">
-                        <div className="w-1 h-1 bg-teal-500 animate-bounce [animation-delay:-0.3s]"></div>
-                        <div className="w-1 h-1 bg-teal-500 animate-bounce [animation-delay:-0.15s]"></div>
-                        <div className="w-1 h-1 bg-teal-500 animate-bounce"></div>
-                     </div>
-                  </div>
-                )}
-             </div>
+         {/* The Map */}
+         <div className={`aspect-square w-full bg-slate-950 rounded-xl border border-slate-800 relative overflow-hidden shadow-2xl mb-4 transition-all ${step === 2 && activeLogIndex >= 0 && combatLogs[activeLogIndex]?.damage > 300 ? 'animate-shake-hit ring-2 ring-red-500/50' : ''}`}>
+            {renderPlaybackGrid()}
+            
+            {/* Overlay Text for Phase */}
+            <div className="absolute top-2 left-2 bg-black/60 px-2 py-1 rounded text-[8px] font-mono text-white backdrop-blur-sm border border-white/10">
+               {step === 0 ? "INIT_STATE" : step === 1 ? "MOVEMENT_PHASE" : step === 2 ? `ACTION_PHASE [${activeLogIndex + 1}/${combatLogs.length}]` : "IMPACT_RESOLVED"}
+            </div>
          </div>
 
-         {/* Sticky Footer Button in Sheet */}
-         <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#0a0f1e] via-[#0a0f1e] to-transparent z-50">
-            {isDone ? (
-              <Button 
-                variant="primary" size="lg" className="w-full shadow-2xl py-5"
-                onClick={() => {
-                  if (tutorial.isActive && tutorial.step === 6) {
-                    game.completeTutorial();
-                  }
-                  nextTurn();
-                }}
-              >
-                <div className="flex items-center gap-2">
-                   <span>INITIALIZE CYCLE {round}</span>
-                   <Zap size={18} className="fill-current" />
-                </div>
-              </Button>
-            ) : (
-              <div className="w-full py-5 text-center">
-                 <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest animate-pulse">Calculating...</span>
-              </div>
-            )}
+         {/* Controls */}
+         <div className="flex gap-2 mb-4">
+            <Button variant="secondary" size="sm" className="flex-1" onClick={() => { setStep(0); setIsPlaying(true); }}>
+               <RotateCcw size={14} /> REPLAY
+            </Button>
+            <Button variant={isPlaying ? 'secondary' : 'primary'} size="sm" className="flex-1" onClick={() => setIsPlaying(!isPlaying)}>
+               {isPlaying ? <Pause size={14} /> : <Play size={14} />} {isPlaying ? 'PAUSE' : 'PLAY'}
+            </Button>
+         </div>
+
+         {/* Logs Scroll */}
+         <div className="flex-1 bg-black/20 rounded-xl border border-slate-800/50 p-2 overflow-y-auto custom-scrollbar min-h-0">
+            {renderLogList()}
+         </div>
+
+         {/* Continue Button */}
+         <div className="mt-4 pt-4 border-t border-slate-800">
+            <Button variant="primary" size="lg" className="w-full py-4 shadow-xl" onClick={() => { if(tutorial.isActive && tutorial.step === 6) game.completeTutorial(); nextTurn(); }}>
+               NEXT CYCLE <ChevronRight size={16} />
+            </Button>
          </div>
       </div>
     </ScreenWrapper>

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Tab, Phase } from '../../types';
-import { ShoppingCart, UserCheck, Terminal, Archive } from 'lucide-react';
+import { ShoppingCart, UserCheck, Terminal, Archive, Briefcase, Box } from 'lucide-react';
 
 interface BottomNavProps {
   currentTab: Tab;
@@ -23,14 +23,14 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onTabChange, p
   if (isHidden) return null;
 
   const tabs = [
-    { id: Tab.MARKET, label: 'Market', icon: <ShoppingCart size={20} /> },
-    { id: Tab.OPERATIVES, label: 'Operatives', icon: <UserCheck size={20} /> },
-    { id: Tab.TERMINAL, label: 'Terminal', icon: <Terminal size={20} /> },
-    { id: Tab.ARCHIVE, label: 'Archive', icon: <Archive size={20} /> },
+    { id: Tab.MARKET, label: 'Market', icon: <ShoppingCart size={20} /> }, // Store/Chests
+    { id: Tab.ARMORY, label: 'Armory', icon: <Box size={20} /> }, // Crafting/Inventory
+    { id: Tab.TERMINAL, label: 'Terminal', icon: <Terminal size={20} /> }, // Play
+    { id: Tab.AGENCY, label: 'Agency', icon: <Briefcase size={20} /> }, // Contracts/Standing
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-[#0a0f1e]/90 backdrop-blur-2xl border-t border-slate-800 z-[100] pb-6 pt-2 px-4 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] safe-area-bottom animate-in slide-in-from-bottom duration-500">
+    <div className="fixed bottom-0 left-0 right-0 bg-[#0a0f1e]/90 backdrop-blur-2xl border-t border-slate-800 z-[100] pb-2 pt-2 px-4 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] safe-area-bottom animate-in slide-in-from-bottom duration-500">
       <div className="flex justify-around items-center max-w-lg mx-auto">
         {tabs.map((tab) => {
           const isActive = currentTab === tab.id;

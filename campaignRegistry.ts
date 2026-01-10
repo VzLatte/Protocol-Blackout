@@ -41,296 +41,268 @@ export const CAMPAIGN_LEVELS: CampaignLevel[] = [
   
   // =========================================================================
   // CHAPTER 1: THE OUTER RIM
+  // Focus: Fundamentals of AP, Range, and Positioning.
   // =========================================================================
   
   createLevel(1, 1, "Hello World", UnitType.AEGIS, AIArchetype.TURTLE, HazardType.NONE, {
-    description: "The Firewall Sentry. It blocks often. Time your strikes.",
-    introText: "You are an unauthorized packet. The Sentry will try to deny your access. Prove you are persistent.",
-    winText: "Firewall breached. Access granted.",
-    lossText: "Access Denied. You struck the shield until you broke.",
-    enemyHpMult: 0.8,
+    description: "The 'Block' tutorial. Time your strikes.",
+    introText: "The Firewall Sentry blocks often. Patience is key.",
+    winCondition: WinCondition.ELIMINATION,
     unlockUnit: UnitType.AEGIS
   }),
 
   createLevel(1, 2, "Static Noise", UnitType.PYRUS, AIArchetype.AGGRO, HazardType.NONE, {
-    description: "An aggressive daemon. Do not trade damage; block the burn.",
-    introText: "This signal is corrupted and volatile. It will burn itself out if you survive the initial heat.",
-    winText: "Heat signature dissipated.",
-    lossText: "Your code was incinerated. You played too recklessly.",
+    description: "The 'Initiative' tutorial. Counter the burn.",
+    introText: "Aggressive signal detected. Do not trade damage recklessly.",
+    winCondition: WinCondition.ELIMINATION,
     unlockUnit: UnitType.PYRUS
   }),
 
-  createLevel(1, 3, "Range Test", UnitType.KILLSHOT, AIArchetype.STRATEGIST, HazardType.NONE, {
-    description: "A sniper protocol. Stay at Range 0 (Melee) to minimize their damage.",
-    introText: "Target is holding position at Range 2. If you stay visible, you will be deleted.",
-    winText: "Sniper neutralized. Range advantage nullified.",
-    lossText: "Headshot. You made yourself an easy target.",
-    unlockUnit: UnitType.KILLSHOT
+  createLevel(1, 3, "High Ground", UnitType.REAPER, AIArchetype.STRATEGIST, HazardType.NONE, {
+    description: "Force the player to take the center hill.",
+    introText: "Strategic position identified. Occupy the high ground.",
+    winCondition: WinCondition.CONTROL,
+    winValue: 3, // Updated to 3
+    unlockUnit: UnitType.REAPER
   }),
 
-  createLevel(1, 4, "The Wall", UnitType.AEGIS, AIArchetype.TURTLE, HazardType.NONE, {
-    description: "A hardened node. Use Reserve AP to break the threshold.",
-    introText: "Standard attacks will not scratch this plating. Conserve energy. Strike once, strike hard.",
-    winText: "Armor shattered. Route clear.",
-    lossText: "You ran out of energy before he ran out of shield.",
-  }),
-
-  createLevel(1, 5, "Ghost Protocol", UnitType.GHOST, AIArchetype.STRATEGIST, HazardType.FOG_OF_WAR, {
-    description: "Evasive target. Do not attack when the Phase Shift is active.",
-    introText: "Sensors are unreliable here. The target is phasing in and out of the sector.",
-    winText: "Pattern locked. Ghost deleted.",
-    lossText: "You swung at nothing and hit nothing.",
+  createLevel(1, 4, "The Shortcut", UnitType.GHOST, AIArchetype.STRATEGIST, HazardType.NONE, {
+    description: "Evasion tutorial. Catch the Ghost.",
+    introText: "Target is evasive. Predict their movement.",
+    winCondition: WinCondition.ELIMINATION,
     unlockUnit: UnitType.GHOST
   }),
 
-  createLevel(1, 6, "Optimization", UnitType.TROJAN, AIArchetype.AGGRO, HazardType.NONE, {
-    description: "Time trial. Defeat the enemy before the system purges you (10 Turns).",
-    winCondition: WinCondition.SURVIVAL, 
-    winValue: 10,
-    introText: "System purge imminent. You have 10 cycles to delete this obstacle.",
-    winText: "Obstacle removed. Purge avoided.",
-    lossText: "Time out. System format complete.",
-    unlockUnit: UnitType.TROJAN
-  }),
-
-  createLevel(1, 7, "Data Leak", UnitType.LEECH, AIArchetype.STRATEGIST, HazardType.NONE, {
-    description: "Vampiric logic. Out-damage the regeneration.",
-    introText: "Target is siphoning your integrity. Every hit you take heals him.",
-    winText: "Parasite removed. Leak plugged.",
-    lossText: "You became the fuel. He ended the fight with more health than he started.",
-    unlockUnit: UnitType.LEECH
-  }),
-
-  createLevel(1, 8, "Overclock", UnitType.BATTERY, AIArchetype.AGGRO, HazardType.NONE, {
-    description: "High energy threat. Beware the AP surge.",
-    introText: "Target reactor is unstable. Expect massive energy spikes.",
-    winText: "Reactor cooled. Energy claimed.",
-    lossText: "Overload. You couldn't weather the storm.",
-    unlockUnit: UnitType.BATTERY
-  }),
-
-  createLevel(1, 9, "Triangulation", UnitType.HUNTER, AIArchetype.STRATEGIST, HazardType.NONE, {
-    description: "You are Marked. Play defensively when the lock is active.",
-    introText: "Lock-on detected. The Hunter knows your position. Move or die.",
-    winText: "Tracker disabled. The hunter becomes the prey.",
-    lossText: "Caught in the open. A fatal error.",
+  createLevel(1, 5, "Threshold", UnitType.HUNTER, AIArchetype.STRATEGIST, HazardType.NONE, {
+    description: "The Hunter will try to pull you off the point.",
+    introText: "Hold the line. The Hunter is coming.",
+    winCondition: WinCondition.CONTROL,
+    winValue: 3,
     unlockUnit: UnitType.HUNTER
   }),
 
-  createLevel(1, 10, "System Halt", UnitType.WARDEN, AIArchetype.TURTLE, HazardType.GRAVITY_WELL, {
-    description: "Heavy Gravity. Movement costs double AP.",
-    introText: "Sector viscosity increased. Movement will drain you. Stand and fight.",
-    winText: "Warden decomissioned. Gravity normalized.",
-    lossText: "Exhaustion. You wasted your energy trying to run.",
-    unlockUnit: UnitType.WARDEN
+  createLevel(1, 6, "System Purge", UnitType.GHOST, AIArchetype.AGGRO, HazardType.NONE, {
+    description: "Pure survival for 8 turns.",
+    introText: "System purge imminent. Survive until the cycle ends.",
+    winCondition: WinCondition.SURVIVAL,
+    winValue: 8,
   }),
 
-  createLevel(1, 11, "Double Blind", UnitType.PYRUS, AIArchetype.AGGRO, HazardType.NONE, {
-    description: "Tag Team: 2 Enemies (50% HP each). Kill the Pyrus first.",
-    enemyCount: 2, 
-    enemyHpMult: 0.6, 
-    introText: "Two signatures detected. One is elusive, one is deadly. Prioritize.",
-    winText: "Duo eliminated. Multitasking complete.",
-    lossText: "Overwhelmed. You couldn't track both vectors.",
+  createLevel(1, 7, "Data Leak", UnitType.MEDIC, AIArchetype.STRATEGIST, HazardType.NONE, {
+    description: "Sustain/Attrition tutorial.",
+    introText: "Target is regenerating. Out-damage their sustain.",
+    winCondition: WinCondition.ELIMINATION,
+    unlockUnit: UnitType.MEDIC
+  }),
+
+  createLevel(1, 8, "Pressure Map", UnitType.AEGIS, AIArchetype.AGGRO, HazardType.NONE, {
+    description: "Force the player to fight a tank on the point.",
+    introText: "Heavy armor on the objective. Displace or destroy.",
+    winCondition: WinCondition.CONTROL,
+    winValue: 3,
+  }),
+
+  createLevel(1, 9, "Triangulation", UnitType.HUNTER, AIArchetype.STRATEGIST, HazardType.NONE, {
+    description: "Marking tutorial. Avoid the lock.",
+    introText: "You are being tracked. Break the line of sight.",
+    winCondition: WinCondition.ELIMINATION,
+  }),
+
+  createLevel(1, 10, "Gravity Well", UnitType.PYRUS, AIArchetype.TURTLE, HazardType.GRAVITY_WELL, {
+    description: "Movement penalty tutorial.",
+    introText: "Heavy gravity detected. Movement costs are doubled.",
+    winCondition: WinCondition.ELIMINATION,
+  }),
+
+  createLevel(1, 11, "Tag Team", UnitType.GHOST, AIArchetype.AGGRO, HazardType.NONE, {
+    description: "Focus-fire tutorial.",
+    introText: "Multiple hostiles. Coordinate your defense.",
+    customSquad: [UnitType.GHOST, UnitType.PYRUS],
+    enemyCount: 2,
+    winCondition: WinCondition.ELIMINATION,
   }),
 
   createLevel(1, 12, "GATEKEEPER", UnitType.AEGIS, AIArchetype.STRATEGIST, HazardType.NONE, {
-    description: "CHAPTER BOSS. High HP. High Defense. The final test.",
+    description: "Boss: You must hold the gate to win.",
     enemyName: "THE GATEKEEPER",
-    enemyHpMult: 2.5,
     introText: "I am the edge of the known network. You go no further.",
-    winText: "Gatekeeper offline. Welcome to the Neural Hub.",
-    lossText: "You are not ready for the deep web.",
-    creditReward: 1000,
+    winCondition: WinCondition.CONTROL,
+    winValue: 3,
+    enemyHpMult: 2.0,
+    creditReward: 1000
   }),
 
   // =========================================================================
   // CHAPTER 2: THE NEURAL HUB
+  // Focus: Hazard adaptation and Resource management.
   // =========================================================================
 
   createLevel(2, 1, "Viral Load", UnitType.MEDIC, AIArchetype.STRATEGIST, HazardType.VIRAL_INVERSION, {
-    description: "Inversion: Healing deals damage this level.",
-    introText: "The medical protocols are reversed. Do not attempt to repair.",
-    winText: "Virus quarantined. Logic restored.",
-    lossText: "Fatal error. You tried to fix what was broken.",
-    unlockUnit: UnitType.MEDIC
+    description: "Viral Inversion: Healing = Damage.",
+    introText: "Medical protocols corrupted. Healing will harm you.",
+    winCondition: WinCondition.ELIMINATION,
   }),
 
-  createLevel(2, 2, "Logic Loop", UnitType.GLITCH, AIArchetype.STRATEGIST, HazardType.AP_FLUX, {
-    description: "Flux: Your AP generation is randomized (2-6).",
-    introText: "Power regulation is offline. Adapt to the fluctuating energy.",
-    winText: "Glitch patched. Stability returned.",
-    lossText: "Power failure. You couldn't adapt to the chaos.",
-    unlockUnit: UnitType.GLITCH
+  createLevel(2, 2, "Logic Loop", UnitType.GHOST, AIArchetype.STRATEGIST, HazardType.AP_FLUX, {
+    description: "AP Flux: Hold ground with random AP.",
+    introText: "Power regulation failing. Adapt to flux.",
+    winCondition: WinCondition.CONTROL,
+    winValue: 4, // Updated to 4
   }),
 
-  createLevel(2, 3, "Burning Chrome", UnitType.PYRUS, AIArchetype.AGGRO, HazardType.LAVA_FLOOR, {
-    description: "Inferno: Floor is lava. Take damage if you Move.",
-    introText: "The floor is compiling garbage data. Step on it and you burn.",
-    winText: "Fire extinguished.",
-    lossText: "Melted. You moved too much.",
+  createLevel(2, 3, "Floor is Lava", UnitType.PYRUS, AIArchetype.AGGRO, HazardType.LAVA_FLOOR, {
+    description: "Movement deals damage.",
+    introText: "The floor is unstable. Move only when necessary.",
+    winCondition: WinCondition.ELIMINATION,
   }),
 
-  createLevel(2, 4, "Deep Freeze", UnitType.WARDEN, AIArchetype.TURTLE, HazardType.NONE, {
-    description: "Stasis: You cannot gain Reserve AP.",
-    introText: "Cryogenic protocols active. No excess energy storage allowed.",
-    winText: "Blockade lifted.",
-    lossText: "Dependency error. You relied too much on reserves.",
+  createLevel(2, 4, "Deep Freeze", UnitType.AEGIS, AIArchetype.TURTLE, HazardType.NONE, {
+    description: "No Reserve AP allowed.",
+    introText: "Cryogenic statis. Energy storage disabled.",
+    winCondition: WinCondition.ELIMINATION,
   }),
 
-  createLevel(2, 5, "Backdoor", UnitType.TROJAN, AIArchetype.AGGRO, HazardType.NONE, {
-    description: "Piercing: Enemy ignores Defense Tier 1.",
-    introText: "This unit has shield-breaker algorithms. Light defense is useless.",
-    winText: "Backdoor closed.",
-    lossText: "Security breach. Your shields did nothing.",
+  createLevel(2, 5, "Backdoor", UnitType.GHOST, AIArchetype.AGGRO, HazardType.NONE, {
+    description: "Enemy ignores Tier 1 Shields.",
+    introText: "Piercing protocols active. Heavy defense required.",
+    winCondition: WinCondition.CONTROL,
+    winValue: 3, // Updated to 3
   }),
 
-  createLevel(2, 6, "Heartbleed", UnitType.LEECH, AIArchetype.STRATEGIST, HazardType.NONE, {
-    description: "Blood Price: Abilities cost HP instead of CD.",
-    introText: "Standard cooldowns are disabled. Every ability uses your own integrity as a catalyst.",
-    winText: "Siphon broken.",
-    lossText: "Bled dry. The price was too high.",
+  createLevel(2, 6, "Heartbleed", UnitType.MEDIC, AIArchetype.STRATEGIST, HazardType.NONE, {
+    description: "Ability usage costs HP.",
+    introText: "Bio-link established. Abilities drain life.",
+    winCondition: WinCondition.ELIMINATION,
   }),
 
-  createLevel(2, 7, "Memory Leak", UnitType.GLITCH, AIArchetype.STRATEGIST, HazardType.FOG_OF_WAR, {
-    description: "Amnesia: Map is obscured (Fog of War).",
-    introText: "Visuals are offline. You are fighting a ghost in the machine.",
-    winText: "Visibility restored.",
-    lossText: "Blind sided.",
+  createLevel(2, 7, "Memory Leak", UnitType.GHOST, AIArchetype.STRATEGIST, HazardType.FOG_OF_WAR, {
+    description: "Fog of War survival.",
+    introText: "Visual feed corrupted. Survive the darkness.",
+    winCondition: WinCondition.SURVIVAL,
+    winValue: 10,
   }),
 
   createLevel(2, 8, "Deadlock", UnitType.AEGIS, AIArchetype.TURTLE, HazardType.NONE, {
-    description: "Synergy: Medic heals Aegis every 2 turns.",
-    enemyCount: 2, 
-    introText: "A symbiotic pair. Break the cycle.",
-    winText: "Cycle broken.",
-    lossText: "Stalemate. They outlasted you.",
+    description: "Duo: High defense + Healing.",
+    customSquad: [UnitType.AEGIS, UnitType.MEDIC],
+    enemyCount: 2,
+    winCondition: WinCondition.ELIMINATION,
   }),
 
-  createLevel(2, 9, "Short Circuit", UnitType.BATTERY, AIArchetype.AGGRO, HazardType.OVERLOAD, {
-    description: "Overload: Dealing >200 dmg hurts YOU for 50.",
-    introText: "Feedback loops active. If you hit too hard, it snaps back.",
-    winText: "Circuit grounded.",
-    lossText: "Fried by your own output.",
+  createLevel(2, 9, "Short Circuit", UnitType.PYRUS, AIArchetype.AGGRO, HazardType.OVERLOAD, {
+    description: "Overload: High damage reflects back to you.",
+    introText: "Feedback loops active. Control your output.",
+    winCondition: WinCondition.CONTROL,
+    winValue: 4, // Updated to 4
   }),
 
   createLevel(2, 10, "Panic", UnitType.REAPER, AIArchetype.AGGRO, HazardType.NONE, {
-    description: "Execution: Instant death if you fall < 20% HP.",
-    introText: "The Reaper is here. Do not let your integrity drop.",
-    winText: "Death defied.",
-    lossText: "Harvested.",
-    unlockUnit: UnitType.REAPER
+    description: "Execute threshold active.",
+    introText: "Do not fall below critical integrity.",
+    winCondition: WinCondition.ELIMINATION,
   }),
 
-  createLevel(2, 11, "Entropy", UnitType.TROJAN, AIArchetype.STRATEGIST, HazardType.NONE, {
-    description: "Decay: Max HP drops by 50 every round.",
-    introText: "Your code is rotting. Finish this quickly.",
-    winText: "Integrity stabilized.",
-    lossText: "Zeroed out.",
+  createLevel(2, 11, "Decay", UnitType.HUNTER, AIArchetype.AGGRO, HazardType.NONE, {
+    description: "Max HP drops every turn. Speed is key.",
+    introText: "System entropy increasing. Hurry.",
+    winCondition: WinCondition.ELIMINATION,
   }),
 
-  createLevel(2, 12, "THE ARCHITECT", UnitType.GLITCH, AIArchetype.STRATEGIST, HazardType.AP_FLUX, {
-    description: "CHAPTER BOSS. Swaps your AP with his every 3 turns.",
+  createLevel(2, 12, "ARCHITECT", UnitType.REAPER, AIArchetype.STRATEGIST, HazardType.AP_FLUX, {
+    description: "Boss: The Architect swaps your AP.",
     enemyName: "THE ARCHITECT",
+    introText: "I wrote the rules. I can rewrite your energy.",
+    winCondition: WinCondition.CONTROL,
+    winValue: 5, // Updated to 5
     enemyHpMult: 2.5,
-    introText: "I wrote the rules you are trying to break.",
-    winText: "Architect crashed. Core access granted.",
-    lossText: "Rewrite complete. You have been formatted.",
-    creditReward: 2000,
+    creditReward: 2000
   }),
 
   // =========================================================================
   // CHAPTER 3: THE CORE
+  // Focus: Master-level execution and rule-breaking.
   // =========================================================================
 
-  createLevel(3, 1, "Zero Day", UnitType.KILLSHOT, AIArchetype.STRATEGIST, HazardType.NONE, {
+  createLevel(3, 1, "Zero Day", UnitType.REAPER, AIArchetype.STRATEGIST, HazardType.NONE, {
     description: "Sniper Alley: Range 2 (Far) damage is +50%.",
-    introText: "The firing lanes are wide open. Close in or die.",
-    winText: "Sniper disconnected.",
-    lossText: "Deleted from range.",
+    introText: "Long range vectors amplified. Close the distance.",
+    winCondition: WinCondition.ELIMINATION,
   }),
 
-  createLevel(3, 2, "Fatal Exception", UnitType.REAPER, AIArchetype.AGGRO, HazardType.NONE, {
-    description: "Glass: Everyone has 50% HP but 200% DMG.",
-    introText: "Safety protocols disabled. One hit is all it takes.",
-    winText: "Exception handled.",
-    lossText: "Critical failure.",
+  createLevel(3, 2, "Fatal Error", UnitType.GHOST, AIArchetype.AGGRO, HazardType.NONE, {
+    description: "Glass: 50% HP / 200% DMG for all.",
+    introText: "Safety rails removed. One hit kills.",
+    winCondition: WinCondition.ELIMINATION,
   }),
 
-  createLevel(3, 3, "Rubber Band", UnitType.WARDEN, AIArchetype.STRATEGIST, HazardType.NONE, {
-    description: "Tether: You are pulled to Range 0 every turn.",
-    introText: "Escape is impossible. Prepare for melee.",
-    winText: "Tether severed.",
-    lossText: "Crushed in the grip.",
+  createLevel(3, 3, "Rubber Band", UnitType.AEGIS, AIArchetype.STRATEGIST, HazardType.NONE, {
+    description: "Pulled to Range 0 every turn. Melee brawl.",
+    introText: "Magnetic tether active. Prepare for melee.",
+    winCondition: WinCondition.CONTROL,
+    winValue: 4, // Updated to 4
   }),
 
   createLevel(3, 4, "Echo Chamber", UnitType.GHOST, AIArchetype.STRATEGIST, HazardType.FOG_OF_WAR, {
-    description: "Mirage: 3 Ghosts appear. 2 are fake (1 HP).",
-    enemyCount: 3, 
-    introText: "Multiple signatures. Find the real one.",
-    winText: "Illusion dispelled.",
-    lossText: "Chasing shadows.",
+    description: "Find the 1 real unit among 2 illusions.",
+    enemyCount: 3,
+    winCondition: WinCondition.ELIMINATION,
   }),
 
-  createLevel(3, 5, "Power Surge", UnitType.BATTERY, AIArchetype.AGGRO, HazardType.NONE, {
-    description: "Supercharge: Both players start with 10 AP.",
-    introText: "Unrestricted energy flow. Don't hold back.",
-    winText: "Surge contained.",
-    lossText: "You hesitated.",
+  createLevel(3, 5, "Power Surge", UnitType.PYRUS, AIArchetype.AGGRO, HazardType.NONE, {
+    description: "Both start with 10 AP. Extreme aggression.",
+    introText: "Unrestricted power flow.",
+    winCondition: WinCondition.SURVIVAL,
+    winValue: 6,
   }),
 
-  createLevel(3, 6, "Firewall", UnitType.PYRUS, AIArchetype.STRATEGIST, HazardType.NONE, {
-    description: "The Anvil: Aegis blocks, Pyrus burns.",
+  createLevel(3, 6, "The Anvil", UnitType.AEGIS, AIArchetype.STRATEGIST, HazardType.NONE, {
+    description: "One blocks, one burns. Hold the center.",
+    customSquad: [UnitType.AEGIS, UnitType.PYRUS],
     enemyCount: 2,
-    introText: "One burns, one blocks. Divide and conquer.",
-    winText: "Firewall deactivated.",
-    lossText: "Trapped and burned.",
+    winCondition: WinCondition.CONTROL,
+    winValue: 5, // Updated to 5
   }),
 
-  createLevel(3, 7, "Null Pointer", UnitType.GLITCH, AIArchetype.STRATEGIST, HazardType.NULL_FIELD, {
-    description: "Silence: No Abilities allowed.",
-    introText: "Functions undefined. Manual override only.",
-    winText: "Pointer fixed.",
-    lossText: "Null reference exception.",
+  createLevel(3, 7, "Null Pointer", UnitType.HUNTER, AIArchetype.STRATEGIST, HazardType.NULL_FIELD, {
+    description: "No abilities allowed. Pure tactics.",
+    introText: "Abilities offline. Rely on fundamentals.",
+    winCondition: WinCondition.ELIMINATION,
   }),
 
-  createLevel(3, 8, "Bleeding Edge", UnitType.HUNTER, AIArchetype.AGGRO, HazardType.NONE, {
-    description: "Predator: Hunter always wins Initiative.",
-    introText: "He is faster than you. You will always strike second.",
-    winText: "Speed isn't everything.",
-    lossText: "Too slow.",
+  createLevel(3, 8, "Predator", UnitType.HUNTER, AIArchetype.AGGRO, HazardType.NONE, {
+    description: "Enemy always wins Initiative.",
+    introText: "They are faster than light.",
+    winCondition: WinCondition.ELIMINATION,
   }),
 
   createLevel(3, 9, "Redundancy", UnitType.MEDIC, AIArchetype.STRATEGIST, HazardType.NONE, {
-    description: "Immortal: They heal each other endlessly.",
+    description: "They heal each other while you try to sit on the point.",
+    customSquad: [UnitType.MEDIC, UnitType.MEDIC],
     enemyCount: 2,
-    introText: "Infinite loop detected. Break the synergy.",
-    winText: "Loop broken.",
-    lossText: "Stack overflow.",
+    winCondition: WinCondition.CONTROL,
+    winValue: 5, // Updated to 5
   }),
 
-  createLevel(3, 10, "Total Eclipse", UnitType.TROJAN, AIArchetype.STRATEGIST, HazardType.NONE, {
-    description: "Blackout Phase starts Round 1.",
-    introText: "Lights out. No safety rails. Good luck.",
-    winText: "Darkness lifted.",
-    lossText: "Lost in the dark.",
+  createLevel(3, 10, "Total Eclipse", UnitType.REAPER, AIArchetype.STRATEGIST, HazardType.NONE, {
+    description: "Blackout Phase from Round 1.",
+    introText: "Lights out. Good luck.",
+    winCondition: WinCondition.ELIMINATION,
   }),
 
-  createLevel(3, 11, "Final Trace", UnitType.REAPER, AIArchetype.STRATEGIST, HazardType.FOG_OF_WAR, {
-    description: "Doppelganger: Enemy matches your unit type.",
+  createLevel(3, 11, "Mirror", UnitType.GHOST, AIArchetype.STRATEGIST, HazardType.NONE, {
+    description: "Enemy is a copy of your current unit.",
     introText: "Fighting self... match detected.",
-    winText: "Self-improvement complete.",
-    lossText: "You are your own worst enemy.",
+    winCondition: WinCondition.ELIMINATION,
   }),
 
-  createLevel(3, 12, "SOURCE", UnitType.SINGULARITY, AIArchetype.STRATEGIST, HazardType.DATA_STORM, {
-    description: "THE END. God Mode. Survive the Collapse.",
+  createLevel(3, 12, "THE SOURCE", UnitType.REAPER, AIArchetype.STRATEGIST, HazardType.DATA_STORM, {
+    description: "Final Boss: Survive the storm and hold the center.",
     enemyName: "THE SOURCE",
-    enemyHpMult: 3.0,
     introText: "I am the beginning and the end. Submit.",
-    winText: "System Rebooting... You are the new Admin.",
-    lossText: "Ctrl + Alt + Delete.",
+    winCondition: WinCondition.CONTROL,
+    winValue: 5,
+    cumulativeCapture: true, // Cumulative progress
+    enemyHpMult: 3.0,
     creditReward: 5000,
-    unlockUnit: UnitType.SINGULARITY
   }),
 ];

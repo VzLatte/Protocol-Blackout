@@ -1,11 +1,11 @@
 
-
 import React, { useState } from 'react';
 import { ScreenWrapper } from '../layout/ScreenWrapper';
 import { GlobalHeader } from '../layout/GlobalHeader';
-import { Phase, VisualLevel, UnitType } from '../../types';
+import { Phase, VisualLevel, UnitType, MaterialType } from '../../types';
 import { UNITS, UNIT_PRICES } from '../../operativeRegistry';
-import { Lock, ShieldCheck, Zap, Database, ChevronRight, AlertCircle, Heart, Activity, Target, Trophy, Info, FileText } from 'lucide-react';
+import { MASTERY_TREES } from '../../masteryRegistry';
+import { Lock, ShieldCheck, Zap, Database, ChevronRight, AlertCircle, Heart, Activity, Target, Trophy, Info, FileText, Cpu, GitBranch, ArrowRight } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { ProgressBar } from '../ui/ProgressBar';
@@ -19,11 +19,13 @@ interface OperativesListViewProps {
 export const OperativesListView: React.FC<OperativesListViewProps> = ({ 
   game, onHelp, onSettings
 }) => {
-  const { unlockedUnits, cipheredUnits, credits, purchaseUnit, visualLevel, getMastery } = game;
+  const { unlockedUnits, cipheredUnits, credits, purchaseUnit, visualLevel, getMastery, unitMastery, unlockMasteryNode, materials } = game;
   const [selectedUnit, setSelectedUnit] = useState<UnitType | null>(null);
+  const [detailTab, setDetailTab] = useState<'DATA' | 'MASTERY'>('DATA');
 
-  /* Resolved missing data variable from selected unit state */
   const selectedUnitData = selectedUnit ? UNITS[selectedUnit] : null;
+  const selectedTree = selectedUnit ? MASTERY_TREES[selectedUnit] : [];
+  const currentCyberCores = materials[MaterialType.CYBER_CORE] || 0;
 
   const renderTier = (tier: number) => {
     const unitsInTier = Object.values(UNITS).filter(u => UNIT_PRICES[u.type].tier === tier);
@@ -94,7 +96,7 @@ export const OperativesListView: React.FC<OperativesListViewProps> = ({
                     <Button 
                       variant="secondary" 
                       className="w-full py-4 rounded-2xl"
-                      onClick={() => setSelectedUnit(u.type)}
+                      onClick={() => { setSelectedUnit(u.type); setDetailTab('DATA'); }}
                     >
                       View Protocol Details
                     </Button>
@@ -131,7 +133,73 @@ export const OperativesListView: React.FC<OperativesListViewProps> = ({
     );
   };
 
-  /* Fixed: Added missing main return statement for the component */
+  const renderMasteryNode = (node: any) => {
+      if (!selectedUnit) return null;
+      const isUnlocked = unitMastery[selectedUnit].includes(node.id);
+      const parentUnlocked = !node.parentId || unitMastery[selectedUnit].includes(node.parentId);
+      const isConflict = node.conflictId && unitMastery[selectedUnit].includes(node.conflictId);
+      
+      const isAffordable = currentCyberCores >= node.cost;
+      const canUnlock = !isUnlocked && parentUnlocked && !isConflict && isAffordable;
+
+      const isGate = node.type === 'GATE';
+      
+      // Node Style
+      let bg = 'bg-slate-900';
+      let border = 'border-slate-700';
+      let text = 'text-slate-500';
+      
+      if (isUnlocked) {
+          bg = isGate ? 'bg-amber-500/20' : 'bg-teal-500/20';
+          border = isGate ? 'border-amber-500' : 'border-teal-500';
+          text = 'text-white';
+      } else if (canUnlock) {
+          bg = 'bg-slate-800 hover:bg-slate-700';
+          border = 'border-white animate-pulse';
+          text = 'text-white';
+      } else if (isConflict) {
+          bg = 'bg-red-950/20';
+          border = 'border-red-900/50';
+          text = 'text-red-900';
+      }
+
+      return (
+          <div key={node.id} className="flex-shrink-0 flex flex-col items-center gap-2 relative group w-48">
+              {/* Connector Line (Left) */}
+              {node.parentId && (
+                  <div className={`absolute top-8 -left-8 w-8 h-0.5 z-0 ${isUnlocked ? (isGate ? 'bg-amber-500' : 'bg-teal-500') : 'bg-slate-800'}`}></div>
+              )}
+
+              <button 
+                  disabled={!canUnlock && !isUnlocked}
+                  onClick={() => {
+                      if (canUnlock) {
+                          unlockMasteryNode(selectedUnit, node.id);
+                          game.playSfx('buy');
+                      }
+                  }}
+                  className={`relative w-16 h-16 flex items-center justify-center transition-all z-10 
+                      ${isGate ? 'rotate-45 rounded-lg' : 'rounded-full'} 
+                      ${bg} border-2 ${border} shadow-lg`}
+              >
+                  <div className={isGate ? '-rotate-45' : ''}>
+                      {isUnlocked ? (
+                          isGate ? <GitBranch size={24} className="text-amber-500"/> : <Cpu size={24} className="text-teal-500"/>
+                      ) : (
+                          <div className="text-[10px] font-black">{node.cost} CC</div>
+                      )}
+                  </div>
+              </button>
+
+              <div className="text-center mt-2 px-2">
+                  <div className={`text-[10px] font-black uppercase ${text}`}>{node.name}</div>
+                  <div className="text-[8px] font-mono text-slate-500 leading-tight mt-1">{node.description}</div>
+                  {isConflict && <div className="text-[8px] text-red-500 font-bold uppercase mt-1">LOCKED BY CHOICE</div>}
+              </div>
+          </div>
+      );
+  };
+
   return (
     <ScreenWrapper visualLevel={visualLevel} centerContent={false}>
       <GlobalHeader phase={Phase.SETUP_PLAYERS} onHelp={onHelp} onSettings={onSettings} onExit={() => {}} credits={credits} />
@@ -149,124 +217,139 @@ export const OperativesListView: React.FC<OperativesListViewProps> = ({
         isOpen={!!selectedUnit} 
         onClose={() => setSelectedUnit(null)} 
         title={`${selectedUnitData?.name || 'UNIT'}_PROTOCOL_DATA`}
-        maxWidth="max-w-3xl"
+        maxWidth="max-w-4xl"
       >
         {selectedUnitData && (
-          <div className="space-y-10 pb-10">
-            {/* Visual Header */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-              <div className="aspect-square bg-slate-950 border border-slate-800 rounded-[3rem] overflow-hidden relative group">
-                {/* Image Display */}
-                {selectedUnitData.image ? (
-                   <div className="absolute inset-0 p-4">
-                      <img 
-                         src={selectedUnitData.image} 
-                         alt={selectedUnitData.name} 
-                         className="w-full h-full object-contain filter group-hover:brightness-110 transition-all duration-700"
-                      />
-                      {/* Scanline Overlay on Image */}
-                      <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-teal-500/5 to-transparent opacity-20 animate-scanline"></div>
-                   </div>
-                ) : (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-800 uppercase font-black text-center p-10 select-none">
-                    <div className="text-4xl italic mb-2 tracking-tighter group-hover:scale-110 transition-transform">NO_UPLINK</div>
-                    <div className="text-[10px] font-mono tracking-widest opacity-50">Visual Data Corrupted or Missing</div>
-                    <div className="mt-4 flex gap-2">
-                      <div className="w-2 h-2 rounded-full bg-slate-800 animate-pulse"></div>
-                      <div className="w-2 h-2 rounded-full bg-slate-800 animate-pulse delay-75"></div>
-                      <div className="w-2 h-2 rounded-full bg-slate-800 animate-pulse delay-150"></div>
-                    </div>
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent opacity-60"></div>
-                <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end">
-                  <div className="bg-teal-500/10 border border-teal-500/30 p-3 rounded-2xl backdrop-blur-md">
-                    <div className="text-[7px] font-mono text-teal-500 uppercase">Mastery Rank</div>
-                    <div className="text-xl font-black text-white italic">{getMastery(selectedUnit!)}</div>
-                  </div>
-                  <div className="bg-slate-900/80 border border-slate-800 px-3 py-1.5 rounded-xl text-[9px] font-mono text-slate-400 uppercase">
-                    ID: {selectedUnit}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                   <h3 className="text-teal-400 font-black italic text-4xl mb-1">{selectedUnitData.name}</h3>
-                   <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-4">{selectedUnitData.role} SPECIALIST</div>
-                   <p className="text-sm text-slate-400 font-mono leading-relaxed italic">
-                     "{selectedUnitData.description}"
-                   </p>
-                </div>
-
-                {/* Stats Dashboard */}
-                <div className="bg-black/40 border border-slate-800 p-6 rounded-[2rem] space-y-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Activity size={14} className="text-teal-500" />
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Performance Metrics</span>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[8px] font-mono text-slate-400 uppercase">
-                        <span>Integrity (HP)</span>
-                        <span className="text-white">{selectedUnitData.hp}</span>
-                      </div>
-                      <ProgressBar value={selectedUnitData.hp} max={1500} color="bg-red-500" height="h-1" />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[8px] font-mono text-slate-400 uppercase">
-                        <span>Speed Latency</span>
-                        <span className="text-white">{selectedUnitData.speed} / 10</span>
-                      </div>
-                      <ProgressBar value={selectedUnitData.speed} max={10} color="bg-teal-500" height="h-1" />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[8px] font-mono text-slate-400 uppercase">
-                        <span>Focus Clarity</span>
-                        <span className="text-white">{selectedUnitData.focus}%</span>
-                      </div>
-                      <ProgressBar value={selectedUnitData.focus} max={50} color="bg-sky-500" height="h-1" />
-                    </div>
-                  </div>
-                </div>
-              </div>
+          <div className="space-y-6 pb-6">
+            {/* Modal Navigation */}
+            <div className="flex bg-slate-900 rounded-xl p-1 border border-slate-800 w-fit mx-auto mb-6">
+               <button 
+                  onClick={() => setDetailTab('DATA')}
+                  className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${detailTab === 'DATA' ? 'bg-teal-500 text-black shadow-lg' : 'text-slate-500 hover:text-white'}`}
+               >
+                  Protocol Data
+               </button>
+               <button 
+                  onClick={() => setDetailTab('MASTERY')}
+                  className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${detailTab === 'MASTERY' ? 'bg-amber-500 text-black shadow-lg' : 'text-slate-500 hover:text-white'}`}
+               >
+                  Mastery Path
+               </button>
             </div>
 
-            {/* Tactical & Lore Sections */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                 <div className="flex items-center gap-2 text-teal-400 border-b border-slate-800 pb-2">
-                   <Target size={16} />
-                   <h4 className="text-[10px] font-black uppercase tracking-[0.2em]">Combat Protocol</h4>
-                 </div>
-                 <div className="space-y-4">
-                   <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
-                      <div className="text-[8px] font-mono text-slate-600 uppercase mb-1 tracking-widest">Active Skill</div>
-                      <div className="text-xs text-white font-bold mb-1 uppercase">{selectedUnitData.activeDesc.split(':')[0]}</div>
-                      <p className="text-[10px] text-slate-500 font-mono leading-relaxed">{selectedUnitData.activeDesc}</p>
-                   </div>
-                   <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
-                      <div className="text-[8px] font-mono text-slate-600 uppercase mb-1 tracking-widest">Passive Logic</div>
-                      <p className="text-[10px] text-slate-300 font-mono leading-relaxed">{selectedUnitData.passiveDesc}</p>
-                   </div>
-                 </div>
-              </div>
+            {/* CONTENT: DATA TAB */}
+            {detailTab === 'DATA' && (
+                <div className="space-y-10 animate-in slide-in-from-left duration-300">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                    <div className="aspect-square bg-slate-950 border border-slate-800 rounded-[3rem] overflow-hidden relative group">
+                        {selectedUnitData.image ? (
+                        <div className="absolute inset-0 p-4">
+                            <img src={selectedUnitData.image} alt={selectedUnitData.name} className="w-full h-full object-contain filter group-hover:brightness-110 transition-all duration-700"/>
+                            <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-teal-500/5 to-transparent opacity-20 animate-scanline"></div>
+                        </div>
+                        ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-800 uppercase font-black text-center p-10 select-none">
+                            <div className="text-4xl italic mb-2 tracking-tighter">NO_UPLINK</div>
+                        </div>
+                        )}
+                        <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end">
+                        <div className="bg-teal-500/10 border border-teal-500/30 p-3 rounded-2xl backdrop-blur-md">
+                            <div className="text-[7px] font-mono text-teal-500 uppercase">Mastery Rank</div>
+                            <div className="text-xl font-black text-white italic">{getMastery(selectedUnit!)}</div>
+                        </div>
+                        </div>
+                    </div>
 
-              <div className="space-y-4">
-                 <div className="flex items-center gap-2 text-amber-500 border-b border-slate-800 pb-2">
-                   <FileText size={16} />
-                   <h4 className="text-[10px] font-black uppercase tracking-[0.2em]">Archive Truth</h4>
-                 </div>
-                 <div className="bg-amber-950/10 border border-amber-900/30 p-6 rounded-2xl">
-                    <p className="text-xs text-amber-200/70 italic font-mono leading-relaxed">
-                      "{selectedUnitData.truth}"
-                    </p>
-                    <div className="h-[1px] w-12 bg-amber-900/50 mt-4"></div>
-                    <div className="mt-2 text-[7px] font-mono text-amber-900 uppercase tracking-widest italic">Encrypted User_Data // Source_ID: UNKNOWN</div>
-                 </div>
-              </div>
-            </div>
+                    <div className="space-y-6">
+                        <div>
+                        <h3 className="text-teal-400 font-black italic text-4xl mb-1">{selectedUnitData.name}</h3>
+                        <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-4">{selectedUnitData.role} SPECIALIST</div>
+                        <p className="text-sm text-slate-400 font-mono leading-relaxed italic">"{selectedUnitData.description}"</p>
+                        </div>
+
+                        <div className="bg-black/40 border border-slate-800 p-6 rounded-[2rem] space-y-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Activity size={14} className="text-teal-500" />
+                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Performance Metrics</span>
+                        </div>
+                        <div className="space-y-3">
+                            <div className="space-y-1">
+                            <div className="flex justify-between text-[8px] font-mono text-slate-400 uppercase"><span>Integrity</span><span className="text-white">{selectedUnitData.hp}</span></div>
+                            <ProgressBar value={selectedUnitData.hp} max={1500} color="bg-red-500" height="h-1" />
+                            </div>
+                            <div className="space-y-1">
+                            <div className="flex justify-between text-[8px] font-mono text-slate-400 uppercase"><span>Speed</span><span className="text-white">{selectedUnitData.speed} / 10</span></div>
+                            <ProgressBar value={selectedUnitData.speed} max={10} color="bg-teal-500" height="h-1" />
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                        <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                            <div className="text-[8px] font-mono text-slate-600 uppercase mb-1 tracking-widest">Active Skill</div>
+                            <div className="text-xs text-white font-bold mb-1 uppercase">{selectedUnitData.activeDesc.split(':')[0]}</div>
+                            <p className="text-[10px] text-slate-500 font-mono leading-relaxed">{selectedUnitData.activeDesc}</p>
+                        </div>
+                        <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
+                            <div className="text-[8px] font-mono text-slate-600 uppercase mb-1 tracking-widest">Passive Logic</div>
+                            <p className="text-[10px] text-slate-300 font-mono leading-relaxed">{selectedUnitData.passiveDesc}</p>
+                        </div>
+                    </div>
+                    <div className="bg-amber-950/10 border border-amber-900/30 p-6 rounded-2xl">
+                        <p className="text-xs text-amber-200/70 italic font-mono leading-relaxed">"{selectedUnitData.truth}"</p>
+                    </div>
+                    </div>
+                </div>
+            )}
+
+            {/* CONTENT: MASTERY TAB */}
+            {detailTab === 'MASTERY' && (
+                <div className="space-y-8 animate-in slide-in-from-right duration-300 min-h-[400px]">
+                    <div className="flex justify-between items-center bg-slate-900/50 p-4 rounded-2xl border border-slate-800">
+                        <div>
+                            <h3 className="text-xl font-black italic text-amber-500 uppercase">Logic Gates</h3>
+                            <p className="text-[10px] text-slate-500 font-mono">Upgrade Core Systems with Cyber Cores.</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="text-right">
+                                <div className="text-[9px] font-mono text-slate-500 uppercase tracking-widest">Available Cores</div>
+                                <div className="text-2xl font-black text-white italic">{currentCyberCores}</div>
+                            </div>
+                            <Cpu size={32} className="text-amber-500 opacity-80" />
+                        </div>
+                    </div>
+
+                    <div className="relative overflow-x-auto custom-scrollbar pb-8">
+                        <div className="flex items-start gap-4 min-w-max px-4 pt-4">
+                            <div className="flex flex-col items-center justify-center h-16 mr-4 opacity-50">
+                                <div className="text-[8px] font-mono uppercase -rotate-90 tracking-widest text-slate-500 whitespace-nowrap">START SEQUENCE</div>
+                            </div>
+                            
+                            {/* Render Logic Tree */}
+                            {selectedTree.length > 0 ? (
+                                selectedTree.map(node => renderMasteryNode(node))
+                            ) : (
+                                <div className="w-full text-center py-10 text-slate-600 font-mono text-xs uppercase">
+                                    No Data Path Found.
+                                </div>
+                            )}
+                            
+                            <div className="flex flex-col items-center justify-center h-16 ml-4 opacity-50">
+                                <ArrowRight size={24} className="text-slate-700"/>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-black/30 p-4 rounded-xl border border-slate-800/50 text-center">
+                        <p className="text-[9px] text-slate-500 font-mono italic">
+                            WARNING: Logic Gates (Diamond Nodes) are mutually exclusive. Choosing one path permanently locks the other. Choose wisely.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             <Button variant="primary" className="w-full py-5" onClick={() => setSelectedUnit(null)}>
               Exit Protocol View

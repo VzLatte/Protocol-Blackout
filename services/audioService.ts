@@ -5,8 +5,28 @@ export class AudioService {
   private ctx: AudioContext | null = null;
   private bgmGain: GainNode | null = null;
   private sfxGain: GainNode | null = null;
+  private wasPlayingBeforeHidden: boolean = false;
 
-  private constructor() {}
+  private constructor() {
+    // Bind to preserve 'this' context
+    this.handleVisibilityChange = this.handleVisibilityChange.bind(this);
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
+  }
+
+  private handleVisibilityChange() {
+    if (document.hidden) {
+      if (this.bgm && !this.bgm.paused) {
+        this.bgm.pause();
+        this.wasPlayingBeforeHidden = true;
+      } else {
+        this.wasPlayingBeforeHidden = false;
+      }
+    } else {
+      if (this.bgm && this.wasPlayingBeforeHidden) {
+        this.bgm.play().catch(e => console.debug("BGM auto-resume deferred", e));
+      }
+    }
+  }
 
   static getInstance() {
     if (!AudioService.instance) {
@@ -42,8 +62,8 @@ export class AudioService {
       if (currentSrc === targetSrc) {
         this.bgm.volume = volume;
         // Crucial: Attempt to play even if source matches, 
-        // in case it was previously blocked by autoplay policy.
-        if (this.bgm.paused) {
+        // in case it was previously blocked by autoplay policy or paused by visibility logic.
+        if (this.bgm.paused && !document.hidden) {
           this.bgm.play().catch(() => {
             // Silently fail if still blocked; it will try again on next interaction/state change
           });

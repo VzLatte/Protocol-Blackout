@@ -1,5 +1,4 @@
 
-
 export enum GameMode {
   TACTICAL = 'TACTICAL',
   CHAOS = 'CHAOS'
@@ -18,10 +17,10 @@ export enum DifficultyLevel {
 }
 
 export enum Tab {
-  MARKET = 'MARKET',
-  OPERATIVES = 'OPERATIVES',
-  TERMINAL = 'TERMINAL',
-  ARCHIVE = 'ARCHIVE'
+  AGENCY = 'AGENCY', 
+  ARMORY = 'ARMORY', 
+  TERMINAL = 'TERMINAL', 
+  MARKET = 'MARKET' 
 }
 
 export enum RangeZone {
@@ -51,22 +50,12 @@ export enum Phase {
 }
 
 export enum UnitType {
+  PYRUS = 'PYRUS',
+  AEGIS = 'AEGIS',
   GHOST = 'GHOST',
   REAPER = 'REAPER',
-  AEGIS = 'AEGIS',
-  PYRUS = 'PYRUS',
-  TROJAN = 'TROJAN',
-  KILLSHOT = 'KILLSHOT',
   HUNTER = 'HUNTER',
-  RAVEN = 'RAVEN',
-  PYTHON = 'PYTHON',
-  MEDIC = 'MEDIC',
-  LEECH = 'LEECH',
-  BATTERY = 'BATTERY',
-  STATIC = 'STATIC',
-  GLITCH = 'GLITCH',
-  WARDEN = 'WARDEN',
-  SINGULARITY = 'SINGULARITY'
+  MEDIC = 'MEDIC'
 }
 
 export enum AIArchetype {
@@ -98,15 +87,115 @@ export enum WinCondition {
   SURVIVAL = 'SURVIVAL',
   UPLOAD = 'UPLOAD',
   RESOURCE_HOLD = 'RESOURCE_HOLD',
+  CONTROL = 'CONTROL' // New
+}
+
+// --- NEW COMBAT TYPES ---
+export enum DamageType {
+  KINETIC = 'KINETIC',
+  ENERGY = 'ENERGY',
+  EXPLOSIVE = 'EXPLOSIVE'
+}
+
+export enum ItemSlot {
+  PRIMARY = 'PRIMARY',
+  SECONDARY = 'SECONDARY',
+  SHIELD = 'SHIELD'
+}
+
+export interface Item {
+  id: string;
+  name: string;
+  description: string;
+  slot: ItemSlot;
+  cost: number;
+  
+  // Primary Stats
+  range?: number;
+  damageType?: DamageType;
+  weight?: number; // Affects stride (-1, 0, +1)
+  
+  // Secondary Stats
+  maxUses?: number;
+  effectType?: 'HEAL' | 'EMP' | 'SMOKE' | 'STIM';
+  effectValue?: number;
+
+  // Shield Stats
+  defenseType?: 'STANDARD' | 'REFLECT' | 'PHASE';
+  mitigationMod?: number; // 1.0 = normal, 1.2 = 20% better
+}
+
+export interface Loadout {
+  primary: Item | null;
+  secondary: Item | null;
+  shield: Item | null;
+}
+
+// --- ECONOMY & CRAFTING ---
+export enum MaterialType {
+  SCRAP = 'SCRAP', 
+  NEURAL_GLASS = 'NEURAL_GLASS', 
+  ISOTOPE_7 = 'ISOTOPE_7', 
+  CLASSIFIED_CORE = 'CLASSIFIED_CORE',
+  CYBER_CORE = 'CYBER_CORE' // New Mastery Currency
+}
+
+export interface Mod {
+  id: string;
+  instanceId: string;
+  name: string;
+  description: string;
+  rarity: 'COMMON' | 'RARE' | 'ELITE' | 'LEGENDARY';
+  stats: any;
+  slot: string;
+  scrapValue: number;
+}
+
+export interface Contract {
+  id: string;
+  title: string;
+  description: string;
+  rewardStanding: number;
+  rewardMaterial?: { type: MaterialType, amount: number };
+  conditionType: 'WIN_MATCH' | 'DEAL_DAMAGE' | 'USE_TIER_1_ONLY' | 'NO_DAMAGE_TAKEN';
+  targetValue: number;
+  currentValue: number;
+  completed: boolean;
+  claimed: boolean;
+}
+
+// --- MASTERY SYSTEM ---
+export interface MasteryStats {
+  hp?: number;
+  maxHp?: number;
+  ap?: number;
+  speed?: number;
+  atkMod?: number; // 1.1 = +10%
+  defMod?: number;
+  range?: number;
+  immuneTo?: string[]; // 'BURN', 'POISON'
+}
+
+export interface MasteryNode {
+  id: string;
+  levelReq: number;
+  type: 'STAT' | 'GATE';
+  name: string;
+  description: string;
+  cost: number; // Cyber Cores
+  stats: MasteryStats;
+  parentId?: string;
+  conflictId?: string; // If this is Gate A, conflictId is Gate B
 }
 
 // --- GRID TYPES ---
 export enum TileType {
   EMPTY = 0,
-  OBSTACLE = 1,     // Blocks movement and LOS
-  HIGH_GROUND = 2,  // Cost 2 Move Points, +0.1 Focus
-  TOXIC = 3,        // Cost 2 Move Points, No bonus
-  THRESHOLD = 4     // Capture point. +Risk/+Reward. Win cond.
+  OBSTACLE = 1,
+  HIGH_GROUND = 2,
+  TOXIC = 3,
+  THRESHOLD = 4,
+  DEBRIS = 5 // New Difficult Terrain
 }
 
 export interface Position {
@@ -117,9 +206,8 @@ export interface Position {
 export interface GridMap {
   id: string;
   name: string;
-  tiles: TileType[][]; // 7x7 grid
+  tiles: TileType[][];
 }
-// ------------------
 
 export interface CampaignLevel {
   id: string;
@@ -141,11 +229,14 @@ export interface CampaignLevel {
   introText: string;
   winText: string;
   lossText: string;
+  customSquad?: UnitType[]; // For mixed enemy types
+  cumulativeCapture?: boolean; // For Control mode
 }
 
 export interface StatusEffect {
-  type: 'BURN' | 'POISON' | 'PARALYZE';
+  type: 'BURN' | 'POISON' | 'PARALYZE' | 'BLIND' | 'STAGGER' | 'AP_BURN' | 'PHASED' | 'IRON_DOME' | 'APEX_PREDATOR' | 'IMMUNE_BURN';
   duration: number;
+  value?: number;
 }
 
 export interface Unit {
@@ -158,15 +249,17 @@ export interface Unit {
   maxHp: number;
   speed: number;
   focus: number;
-  range: number; // New Range Stat
+  range: number; 
   atkStat: number; 
   defStat: number; 
   passiveDesc: string;
   activeDesc: string;
+  desperationName?: string;
+  desperationDesc?: string;
   cooldownMax: number; 
   truth: string;
   image?: string;
-  minTierToPierceWalls?: number; // AI Logic extensibility
+  minTierToPierceWalls?: number; 
 }
 
 export interface AIConfig {
@@ -181,8 +274,8 @@ export interface Player {
   hp: number;
   maxHp: number;
   ap: number;
-  position: Position; // New: Grid Position
-  moveFatigue: number; // Deprecated but kept for type safety in legacy logs
+  position: Position;
+  moveFatigue: number; 
   blockFatigue: number; 
   isEliminated: boolean;
   isAI: boolean;
@@ -196,7 +289,12 @@ export interface Player {
   targetLockId?: string;
   overclockTurns?: number;
   isBoss?: boolean;
-  captureTurns: number; // New: Track consecutive turns on threshold
+  captureTurns: number;
+  loadout: Loadout; // New Loadout System
+  itemUses: { current: number, max: number }; // For Secondary
+  tempSpeedMod?: number; // Kinetic Stagger
+  // Runtime Stats Modifiers
+  statModifiers?: MasteryStats;
 }
 
 export enum ActionType {
@@ -209,19 +307,23 @@ export enum ActionType {
   BOUNTY = 'BOUNTY',
   DESPERATION = 'DESPERATION',
   COLLISION = 'COLLISION',
-  CAPTURE = 'CAPTURE'
+  CAPTURE = 'CAPTURE',
+  ITEM = 'ITEM',
+  INTERCEPT = 'INTERCEPT',
+  VENT = 'VENT' // New Log Type
 }
 
 export interface Action {
-  blockAp: number; // 0-3
-  attackAp: number; // 0-3
-  moveAp: number; // AP Spent on movement
-  movePath?: Position[]; // New: List of steps taken
+  blockAp: number; 
+  attackAp: number; 
+  moveAp: number; 
+  movePath?: Position[]; 
   abilityActive: boolean;
   isDesperation?: boolean;
+  useItem?: boolean; // New: Trigger Secondary
   targetId?: string;
-  moveDest?: Position; // Legacy/End Point
-  moveIntent?: MoveIntent; // Legacy
+  moveDest?: Position; 
+  moveIntent?: MoveIntent; 
 }
 
 export interface TurnData {
@@ -236,6 +338,7 @@ export interface ResolutionLog {
   targetName?: string;
   type: ActionType;
   damage?: number;
+  damageType?: DamageType; 
   mitigatedAmount?: number;
   shield?: number; 
   apSpent?: number;
@@ -247,6 +350,11 @@ export interface ResolutionLog {
   defenseTier?: number;
   rangeChange?: string;
   fatigueGained?: number;
+  
+  // New Visual Data
+  impactPoint?: Position; 
+  originPoint?: Position; 
+  path?: Position[]; 
 }
 
 export interface TutorialState {

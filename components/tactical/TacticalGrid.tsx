@@ -2,8 +2,8 @@
 import React from 'react';
 import { GridMap, Player, Position, TileType, UnitType } from '../../types';
 import { GRID_SIZE, TILE_COSTS } from '../../constants';
-import { Ghost, Shield, Zap, Skull, Mountain, Skull as ToxicIcon, Ban, Target } from 'lucide-react';
-import { ReachableTile } from '../../utils/gridLogic';
+import { Ghost, Shield, Zap, Skull, Mountain, Skull as ToxicIcon, Ban, Target, Crosshair } from 'lucide-react';
+import { ReachableTile, getManhattanDistance } from '../../utils/gridLogic';
 
 interface TacticalGridProps {
   map: GridMap;
@@ -21,6 +21,10 @@ export const TacticalGrid: React.FC<TacticalGridProps> = ({
 }) => {
   const currentPlayer = players.find(p => p.id === currentPlayerId);
   const targetPlayer = players.find(p => p.id === targetId);
+  
+  // Calculate Attack Range Context
+  const rangeOrigin = selectedDest || currentPlayer?.position;
+  const attackRange = currentPlayer?.unit?.range ?? 2; // Default to 2
 
   const renderTileContent = (x: number, y: number, type: TileType) => {
     // Check for player
@@ -101,6 +105,10 @@ export const TacticalGrid: React.FC<TacticalGridProps> = ({
             const isSelected = selectedDest?.x === x && selectedDest?.y === y;
             const isCurrentPos = currentPlayer?.position.x === x && currentPlayer?.position.y === y;
             
+            // Attack Range Calculation
+            const dist = rangeOrigin ? getManhattanDistance(rangeOrigin, {x, y}) : 999;
+            const inAttackRange = dist <= attackRange;
+
             let bgClass = 'bg-slate-900/40';
             if (type === TileType.OBSTACLE) bgClass = 'bg-slate-950';
             if (type === TileType.HIGH_GROUND) bgClass = 'bg-sky-900/10';
@@ -120,8 +128,18 @@ export const TacticalGrid: React.FC<TacticalGridProps> = ({
               <div 
                 key={`${x}-${y}`}
                 onClick={() => onTileClick({x, y})}
-                className={`relative border border-slate-800/50 rounded-lg overflow-hidden transition-all flex items-center justify-center ${bgClass}`}
+                className={`relative border rounded-lg overflow-hidden transition-all flex items-center justify-center ${bgClass} ${isSelected ? '' : 'border-slate-800/50'}`}
               >
+                 {/* Attack Range Indicator Overlay */}
+                 {inAttackRange && !isSelected && type !== TileType.OBSTACLE && (
+                    <div className="absolute inset-0 pointer-events-none z-0">
+                       <div className="absolute inset-0 ring-1 ring-red-500/20 ring-inset"></div>
+                       {/* Optional corner markers for aesthetic */}
+                       <div className="absolute bottom-0.5 left-0.5 w-0.5 h-0.5 bg-red-500/40"></div>
+                       <div className="absolute top-0.5 right-0.5 w-0.5 h-0.5 bg-red-500/40"></div>
+                    </div>
+                 )}
+
                  {renderTileContent(x, y, type)}
                  
                  {/* Cost Marker */}
@@ -143,6 +161,7 @@ export const TacticalGrid: React.FC<TacticalGridProps> = ({
       <div className="mt-4 flex justify-center gap-4 text-[9px] font-mono text-slate-500 uppercase flex-wrap">
          <div className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-500/50"></div> 1 AP</div>
          <div className="flex items-center gap-1"><div className="w-2 h-2 bg-amber-500/50"></div> 2 AP</div>
+         <div className="flex items-center gap-1"><div className="w-2 h-2 border border-red-500/40"></div> Range</div>
          <div className="flex items-center gap-1"><Target size={10} className="text-amber-500"/> Capture</div>
       </div>
     </div>

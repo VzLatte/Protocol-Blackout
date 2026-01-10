@@ -49,7 +49,7 @@ const UnitDisplay: React.FC<{
       <div className={`bg-slate-900/80 backdrop-blur-md p-3 rounded-xl border border-slate-700 shadow-xl min-w-[140px] sm:min-w-[180px] z-10 animate-spawn ${animation === 'faint' ? 'opacity-0 transition-opacity duration-500' : ''}`}>
         <div className="flex justify-between items-end mb-1">
           <span className="text-[10px] font-black uppercase text-white italic truncate max-w-[100px]">{player.name}</span>
-          <span className="text-[8px] font-mono text-slate-400">LVL {player.unit.type === UnitType.SINGULARITY ? '99' : '10'}</span>
+          <span className="text-[8px] font-mono text-slate-400">LVL {player.maxHp > 2000 ? '99' : '10'}</span>
         </div>
         <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-950">
            <div className={`h-full transition-all duration-500 ${hpColor}`} style={{ width: `${hpPercent}%` }}></div>

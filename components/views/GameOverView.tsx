@@ -2,7 +2,7 @@
 import React from 'react';
 import { ScreenWrapper } from '../layout/ScreenWrapper';
 import { Button } from '../ui/Button';
-import { Trophy, Zap, AlertTriangle, Cpu, Terminal, TrendingUp } from 'lucide-react';
+import { Trophy, Zap, AlertTriangle, Cpu, Terminal, TrendingUp, ChevronRight, Star } from 'lucide-react';
 import { VisualLevel } from '../../types';
 import { CAMPAIGN_LEVELS } from '../../campaignRegistry';
 
@@ -16,6 +16,26 @@ export const GameOverView: React.FC<GameOverViewProps> = ({ game }) => {
   const currentLvl = isCampaign ? CAMPAIGN_LEVELS.find(l => l.id === game.currentCampaignLevelId) : null;
   const isVictory = game.victoryReason === "OPERATIONAL_SUCCESS" || (!isCampaign && !!winner && !winner.isAI);
   
+  // Rank Calculation
+  const roundsUsed = game.round;
+  const maxRounds = game.maxRounds;
+  const ratio = roundsUsed / maxRounds;
+  let rank = "C";
+  if (ratio <= 0.4) rank = "S";
+  else if (ratio <= 0.6) rank = "A";
+  else if (ratio <= 0.8) rank = "B";
+  
+  // Fail Rank
+  if (!isVictory) rank = "F";
+
+  const rankColors = {
+      "S": "text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.8)]",
+      "A": "text-teal-400",
+      "B": "text-sky-400",
+      "C": "text-slate-400",
+      "F": "text-red-600"
+  };
+
   const narrativeText = isCampaign && currentLvl
     ? (isVictory ? currentLvl.winText : currentLvl.lossText)
     : (winner ? "Simulation complete. Operative status: Viable." : "Zero-sum achieved. Tactical void detected.");
@@ -24,9 +44,24 @@ export const GameOverView: React.FC<GameOverViewProps> = ({ game }) => {
     ? (isVictory ? "MISSION_SUCCESS" : "DATA_CORRUPTION")
     : (winner ? "SECTOR_SECURED" : "TOTAL_BLACKOUT");
 
+  // Dynamic Subtitle based on victory type
+  let subTitle = "SYSTEM_STATUS";
+  if (isVictory) {
+      if (game.victoryReason === "OPERATIONAL_SUCCESS" && currentLvl?.winCondition === 'CONTROL') subTitle = "OBJECTIVE_SECURED";
+      else if (game.victoryReason === "OPERATIONAL_SUCCESS" && currentLvl?.winCondition === 'ELIMINATION') subTitle = "THREAT_NEUTRALIZED";
+      else subTitle = "TACTICAL_DOMINANCE";
+  } else {
+      subTitle = "CRITICAL_FAILURE";
+  }
+
+  const nextLevelIdx = CAMPAIGN_LEVELS.findIndex(l => l.id === game.currentCampaignLevelId);
+  const hasNextLevel = nextLevelIdx !== -1 && nextLevelIdx + 1 < CAMPAIGN_LEVELS.length;
+
   return (
     <ScreenWrapper visualLevel={game.visualLevel} className="p-8 text-center">
-       <div className="z-10 animate-in zoom-in duration-1000 space-y-12 max-w-2xl w-full flex flex-col items-center py-20">
+       <div className="z-10 animate-in zoom-in duration-1000 space-y-8 max-w-2xl w-full flex flex-col items-center py-10">
+          
+          {/* Main Visual Icon */}
           <div className="relative">
             {isVictory ? (
               <>
@@ -46,15 +81,27 @@ export const GameOverView: React.FC<GameOverViewProps> = ({ game }) => {
               {titleText}
             </h1>
             <div className="space-y-2">
-              <div className="text-[10px] font-mono text-slate-500 uppercase tracking-[0.6em]">
-                {isCampaign ? "Establishment Feed" : (winner ? "Standing Operative" : "System Status")}
-              </div>
-              <div className={`text-4xl sm:text-6xl md:text-7xl font-black uppercase italic tracking-tighter glitch-text leading-none drop-shadow-[0_10px_30px_rgba(255,255,255,0.1)] ${isVictory ? 'text-teal-400' : 'text-red-500'}`}>
-                {isCampaign ? (isVictory ? "LINK_STABLE" : "SIGNAL_LOST") : (winner ? winner.name : "VOID_DETECTED")}
+              <div className="text-[10px] font-mono text-slate-500 uppercase tracking-[0.6em] animate-pulse">
+                {subTitle}
               </div>
               
+              {/* RANK DISPLAY */}
+              {isCampaign && isVictory && (
+                  <div className="py-4">
+                      <div className={`text-8xl font-black italic ${rankColors[rank as keyof typeof rankColors]} leading-none`}>{rank}</div>
+                      <div className="text-[9px] font-mono uppercase tracking-widest text-slate-500 mt-2">Tactical Efficiency Rating</div>
+                  </div>
+              )}
+
+              {/* VICTORY/LOSS TITLE */}
+              {!isCampaign && (
+                  <div className={`text-4xl sm:text-6xl md:text-7xl font-black uppercase italic tracking-tighter glitch-text leading-none drop-shadow-[0_10px_30px_rgba(255,255,255,0.1)] ${isVictory ? 'text-teal-400' : 'text-red-500'}`}>
+                    {winner ? winner.name : "VOID"}
+                  </div>
+              )}
+              
               <div className="max-w-md mx-auto">
-                <p className="text-slate-300 font-mono text-xs sm:text-sm uppercase tracking-widest mt-8 italic leading-relaxed border-l-2 border-slate-800 pl-4 py-2">
+                <p className="text-slate-300 font-mono text-xs sm:text-sm uppercase tracking-widest mt-4 italic leading-relaxed border-l-2 border-slate-800 pl-4 py-2">
                   "{narrativeText}"
                 </p>
               </div>
@@ -73,7 +120,7 @@ export const GameOverView: React.FC<GameOverViewProps> = ({ game }) => {
                    </div>
                 </div>
                 <div className={`text-3xl font-black italic text-right ${isVictory ? 'text-sky-400' : 'text-slate-600'}`}>
-                   +{isVictory ? (isCampaign ? currentLvl?.creditReward : 250) : 0}
+                   +{game.lastEarnedCredits}
                 </div>
              </div>
 
@@ -88,15 +135,26 @@ export const GameOverView: React.FC<GameOverViewProps> = ({ game }) => {
                    </div>
                 </div>
                 <div className={`text-3xl font-black italic text-right ${isVictory ? 'text-teal-400' : 'text-slate-600'}`}>
-                   +{isVictory ? (isCampaign ? currentLvl?.xpReward : 100) : 0}
+                   +{game.lastEarnedXp}
                 </div>
              </div>
           </div>
 
           <div className="w-full pt-8 flex flex-col gap-4">
+            {/* NEXT MISSION BUTTON */}
+            {isCampaign && isVictory && hasNextLevel && (
+                <Button 
+                    variant="primary" size="lg" 
+                    className="w-full py-6 text-xl shadow-[0_0_30px_rgba(20,184,166,0.4)] animate-pulse" 
+                    onClick={() => { game.playSfx('confirm'); game.advanceCampaign(); }}
+                >
+                    NEXT MISSION <ChevronRight size={24} />
+                </Button>
+            )}
+
             <Button 
-              variant="primary" size="lg" 
-              className="w-full py-6 text-xl shadow-[0_0_30px_rgba(20,184,166,0.2)]" 
+              variant={isCampaign && isVictory ? 'secondary' : 'primary'} size="lg" 
+              className="w-full py-6 text-xl" 
               onClick={game.resetToMain}
             >
               Return to Command

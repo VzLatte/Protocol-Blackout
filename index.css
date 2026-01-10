@@ -1,7 +1,3 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 
 body {
     font-family: 'Inter', sans-serif;
@@ -239,3 +235,47 @@ body {
 .animate-faint { animation: fade-out-down 1.2s forwards ease-in; }
 .animate-float { animation: float-idle 3s ease-in-out infinite; }
 .animate-spawn { animation: spawn-in 0.5s ease-out; }
+
+/* 3D Briefcase Animations */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.transform-style-3d {
+  transform-style: preserve-3d;
+}
+
+.rotate-x-90 {
+  transform: rotateX(90deg);
+}
+
+.rotate-x-0 {
+  transform: rotateX(0deg);
+}
+
+.origin-top {
+  transform-origin: top;
+}
+
+/* Foam Texture */
+.bg-foam {
+  background-color: #1a1a1a;
+  background-image: radial-gradient(#262626 15%, transparent 16%), radial-gradient(#262626 15%, transparent 16%);
+  background-size: 10px 10px;
+  background-position: 0 0, 5px 5px;
+  box-shadow: inset 0 0 20px #000;
+}
+
+/* Stamps & Stickers */
+.clearance-stamp {
+  border: 2px solid currentColor;
+  padding: 4px 8px;
+  transform: rotate(-12deg);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.8;
+  mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.5' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.5'/%3E%3C/svg%3E");
+  mask-mode: alpha;
+}

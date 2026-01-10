@@ -1,11 +1,12 @@
 
 import { useState } from 'react';
-import { Phase, Tab, UnitType, VisualLevel, AIArchetype, AIDifficulty, Player, TurnData, HazardType, DifficultyLevel, GameMode, Action } from '../types';
+import { Phase, Tab, UnitType, VisualLevel, AIArchetype, AIDifficulty, Player, TurnData, HazardType, DifficultyLevel, GameMode, Action, WinCondition, TileType, MasteryStats } from '../types';
 import { INITIAL_HP } from '../constants';
 import { CAMPAIGN_LEVELS } from '../campaignRegistry';
 import { UNITS } from '../operativeRegistry';
 import { AudioService } from '../services/audioService';
 import { calculateAIMove } from '../aiLogic';
+import { MASTERY_TREES } from '../masteryRegistry';
 
 // Sub-hooks
 import { useProgression } from './useProgression';
@@ -59,13 +60,33 @@ export function useGameState() {
         
         // AI Cheat Logic for Blackout Difficulty
         if (campaign.campaignDifficulty === DifficultyLevel.BLACKOUT) {
+           // Find Threshold for context
+           let thresholdPos = undefined;
+           if (battle.activeMap) {
+               battle.activeMap.tiles.forEach((row: any[], y: number) => {
+                   row.forEach((tile: TileType, x: number) => {
+                       if (tile === TileType.THRESHOLD) {
+                           thresholdPos = { x, y };
+                       }
+                   });
+               });
+           }
+
+           const cheatContext = {
+               difficulty: campaign.campaignDifficulty,
+               winCondition: lvl?.winCondition || WinCondition.ELIMINATION,
+               thresholdPos: thresholdPos
+           };
+
            completeSubmissions.forEach(sub => {
               const p = battle.players.find(x => x.id === sub.playerId);
               if (p?.isAI) {
                  // Recalculate AI move with knowledge of player moves
                  try {
                    const cheatMove = calculateAIMove(
-                     p, battle.players, battle.fullHistory, battle.round, campaign.currentChapter, campaign.campaignDifficulty, battle.activeMap, completeSubmissions
+                     p, battle.players, battle.fullHistory, battle.round, 
+                     cheatContext,
+                     battle.activeMap, completeSubmissions
                    );
                    sub.action = cheatMove;
                  } catch(e) { console.error("Cheat calc failed", e); }
@@ -97,6 +118,11 @@ export function useGameState() {
              else if (human && alivePlayers.length === 1 && alivePlayers[0].id === human.id) {
                  battle.setVictoryReason("MISSION_COMPLETE");
                  progression.updateStats(true);
+                 // Contracts Update
+                 progression.updateContracts([
+                    { type: 'WIN_MATCH', value: 1 },
+                    { type: 'PLAY_MATCHES', value: 1 }
+                 ]);
              }
              // AI vs AI or Multiplayer end state
              else if (alivePlayers.length <= 1) {
@@ -123,27 +149,85 @@ export function useGameState() {
   };
 
   const finalizePlayers = () => {
-    const newPlayers: Player[] = playerConfigs.slice(0, setupCount).map((cfg, idx) => ({
-      id: `p${idx}`,
-      name: cfg.name,
-      unit: null,
-      hp: INITIAL_HP,
-      maxHp: INITIAL_HP,
-      ap: 3,
-      moveFatigue: 0,
-      blockFatigue: 0,
-      isEliminated: false,
-      isAI: cfg.isAI,
-      aiConfig: cfg.isAI ? { archetype: cfg.archetype, difficulty: cfg.difficulty } : undefined,
-      totalReservedAp: 0,
-      cooldown: 0,
-      activeUsed: false,
-      desperationUsed: false,
-      statuses: [],
-      isAbilityActive: false,
-      position: { x: idx === 0 ? 0 : 6, y: 3 },
-      captureTurns: 0
-    }));
+    // Inject Mod stats & Mastery stats here
+    const baseAP = 25; // COLD START
+    
+    const newPlayers: Player[] = playerConfigs.slice(0, setupCount).map((cfg, idx) => {
+      // Calculate stats for HUMAN players only
+      let startAp = baseAP;
+      let startHp = INITIAL_HP;
+      let startMaxHp = INITIAL_HP;
+      
+      const isHuman = !cfg.isAI;
+      let activeMods = isHuman ? progression.equippedMods : [];
+      let masteryBonuses: MasteryStats = {};
+      let initialStatuses: any[] = [];
+
+      // 1. Apply Mods (Legacy)
+      if (activeMods) {
+         activeMods.forEach(m => {
+            if (m.stats.ap) startAp += m.stats.ap;
+            if (m.stats.maxHp) startMaxHp += m.stats.maxHp;
+            if (m.stats.hp) startHp += m.stats.hp;
+         });
+      }
+
+      // 2. Apply Mastery Path (New)
+      if (isHuman && confirmingUnit) {
+          const unlockedNodes = progression.unitMastery[confirmingUnit] || [];
+          const tree = MASTERY_TREES[confirmingUnit] || [];
+          
+          unlockedNodes.forEach(nodeId => {
+              const node = tree.find(n => n.id === nodeId);
+              if (node && node.stats) {
+                  if (node.stats.maxHp) startMaxHp += node.stats.maxHp;
+                  if (node.stats.hp) startHp += node.stats.hp;
+                  if (node.stats.ap) startAp += node.stats.ap;
+                  if (node.stats.immuneTo) {
+                      node.stats.immuneTo.forEach(imm => {
+                          initialStatuses.push({ type: `IMMUNE_${imm}`, duration: 999 });
+                      });
+                  }
+                  
+                  // Aggregate percentage mods
+                  masteryBonuses.atkMod = (masteryBonuses.atkMod || 0) + (node.stats.atkMod || 0);
+                  masteryBonuses.defMod = (masteryBonuses.defMod || 0) + (node.stats.defMod || 0);
+                  masteryBonuses.speed = (masteryBonuses.speed || 0) + (node.stats.speed || 0);
+              }
+          });
+      }
+
+      // Cap HP
+      startHp = Math.min(startHp, startMaxHp);
+
+      return {
+        id: `p${idx}`,
+        name: cfg.name,
+        unit: null,
+        hp: startHp,
+        maxHp: startMaxHp,
+        ap: startAp,
+        moveFatigue: 0,
+        blockFatigue: 0,
+        isEliminated: false,
+        isAI: cfg.isAI,
+        aiConfig: cfg.isAI ? { archetype: cfg.archetype, difficulty: cfg.difficulty } : undefined,
+        totalReservedAp: 0,
+        cooldown: 0,
+        activeUsed: false,
+        desperationUsed: false,
+        statuses: initialStatuses,
+        isAbilityActive: false,
+        position: { x: idx === 0 ? 0 : 6, y: 3 },
+        captureTurns: 0,
+        equippedMods: activeMods,
+        statModifiers: masteryBonuses, // Injected for Combat Engine to read
+        loadout: (!cfg.isAI) ? progression.currentLoadout : { primary: null, secondary: null, shield: null },
+        itemUses: (!cfg.isAI && progression.currentLoadout?.secondary) 
+          ? { current: 0, max: progression.currentLoadout.secondary.maxUses || 0 } 
+          : { current: 0, max: 0 }
+      };
+    });
 
     battle.setPlayers(newPlayers);
     battle.initDistances(newPlayers);
