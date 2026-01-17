@@ -143,26 +143,28 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({
     };
 
     return (
-      <div className="grid gap-1 w-full h-full absolute inset-0" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+      <div className="absolute inset-0 bg-gradient-to-b from-slate-950 to-slate-950/70">
+        <div className="grid gap-[1px] sm:gap-1 w-full h-full absolute inset-0 bg-slate-800/40 p-[1px]" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
         {rows.map((row: any, y: number) => (
           (row?.columns || row).map((type: number, x: number) => {
             const t = typeof type === 'number' ? type : 0;
-            const classes = ["border rounded-sm relative flex items-center justify-center text-[10px]"];
+            const classes = ["rounded-[2px] sm:rounded-sm relative flex items-center justify-center text-[10px] sm:text-[11px] font-black"];
             // Distinguish tiles visually
-            if (t === TileType.EMPTY) classes.push('border-slate-700 bg-slate-900/10');
-            else if (t === TileType.OBSTACLE) classes.push('border-slate-600 bg-slate-700');
-            else if (t === TileType.HIGH_GROUND) classes.push('border-yellow-900 bg-yellow-700/20');
-            else if (t === TileType.TOXIC) classes.push('border-rose-800 bg-rose-900/30');
-            else if (t === TileType.THRESHOLD) classes.push('border-amber-600 bg-amber-800/20');
-            else if (t === TileType.DEBRIS) classes.push('border-slate-800 bg-slate-800/30');
+            if (t === TileType.EMPTY) classes.push('bg-slate-950/30');
+            else if (t === TileType.OBSTACLE) classes.push('bg-slate-700/90 shadow-inner');
+            else if (t === TileType.HIGH_GROUND) classes.push('bg-yellow-700/20 ring-1 ring-yellow-700/30');
+            else if (t === TileType.TOXIC) classes.push('bg-rose-900/35 ring-1 ring-rose-500/25');
+            else if (t === TileType.THRESHOLD) classes.push('bg-amber-800/20 ring-1 ring-amber-500/30');
+            else if (t === TileType.DEBRIS) classes.push('bg-slate-800/35 ring-1 ring-slate-500/20');
 
             return (
               <div key={`${x}-${y}`} className={`${classes.join(' ')} w-full h-full`}>
-                <span className="opacity-80 select-none">{tileEmoji(t)}</span>
+                <span className="opacity-80 select-none leading-none">{tileEmoji(t)}</span>
               </div>
             );
           })
         ))}
+        </div>
       </div>
     );
   };
@@ -185,22 +187,22 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({
         onSettings={onSettings}
       />
 
-      <div className="flex-1 flex flex-col p-4 w-full max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-[10px] font-black uppercase text-slate-500 tracking-widest">REPLAY CYCLE {round - 1}</div>
+      <div className="flex-1 flex flex-col p-3 sm:p-4 w-full max-w-4xl mx-auto">
+        <div className="flex items-center justify-between mb-3 gap-3">
+          <div className="text-[10px] sm:text-[10px] font-black uppercase text-slate-500 tracking-widest">REPLAY CYCLE {round - 1}</div>
           <div className="flex items-center gap-3">
             {isMultiplayer && (
               <div className="flex items-center gap-2 text-[12px] font-mono text-slate-300">
                 <Clock size={14} /> <span>{secondsLeft}s</span>
               </div>
             )}
-            <div className="text-[12px] font-mono text-slate-400">Action {Math.max(0, actionIndex + 1)}/{totalActions}</div>
+            <div className="text-[12px] font-mono text-slate-400 whitespace-nowrap">Action {Math.max(0, actionIndex + 1)}/{totalActions}</div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
           {/* MAP + Players */}
-          <div className="aspect-square bg-slate-950 rounded-xl border border-slate-800 relative overflow-hidden shadow-2xl">
+          <div className="aspect-square bg-slate-950 rounded-2xl border border-slate-800 relative overflow-hidden shadow-2xl">
             {renderGrid()}
 
             {/* Action SVG (draw current action arrow if available) */}
@@ -213,7 +215,7 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({
                   const x2 = (log.impactPoint.x * (100 / GRID_SIZE)) + (50 / GRID_SIZE);
                   const y2 = (log.impactPoint.y * (100 / GRID_SIZE)) + (50 / GRID_SIZE);
                   return (
-                    <line x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} stroke={log.type === ActionType.INTERCEPT ? '#f59e0b' : '#ef4444'} strokeWidth="3" strokeDasharray="6,4" className="animate-pulse" />
+                    <line x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} stroke={log.type === ActionType.INTERCEPT ? '#f59e0b' : '#ef4444'} strokeWidth="2" strokeDasharray="6,4" className="animate-pulse" />
                   );
                 })()
               )}
@@ -232,10 +234,10 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({
               return (
                 <div key={p.id} className="absolute transition-all duration-300 flex flex-col items-center justify-center z-20"
                   style={{ left: `${(pos.x * 100) / GRID_SIZE}%`, top: `${(pos.y * 100) / GRID_SIZE}%`, width: `${100 / GRID_SIZE}%`, height: `${100 / GRID_SIZE}%` }}>
-                  <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center bg-slate-800 ${isTarget ? 'ring-2 ring-red-500 scale-110' : 'border-teal-500'}`}>
-                    <span className="text-[9px] font-bold">{p.name.slice(0,2)}</span>
+                  <div className={`w-7 h-7 sm:w-10 sm:h-10 rounded-full border-2 flex items-center justify-center bg-slate-900/80 backdrop-blur ${isTarget ? 'ring-2 ring-red-500 scale-110' : 'border-teal-500'}`}>
+                    <span className="text-[9px] sm:text-[9px] font-bold">{p.name.slice(0,2)}</span>
                   </div>
-                  <div className="w-12 h-2 bg-black mt-2 rounded-full overflow-hidden">
+                  <div className="w-10 sm:w-12 h-2 bg-black/70 mt-1.5 sm:mt-2 rounded-full overflow-hidden">
                     <div className="h-full bg-teal-500 transition-all duration-300" style={{ width: `${((visualHps[p.id] || 0) / p.maxHp) * 100}%` }} />
                   </div>
                 </div>
@@ -245,27 +247,27 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({
 
           {/* Controls & Logs */}
           <div className="flex flex-col gap-3">
-            <div className="bg-black/40 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+            <div className="bg-black/40 border border-slate-800 rounded-xl p-2 sm:p-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <button onClick={() => { setIsPlaying(false); handlePrev(); }} className="p-2 rounded-md hover:bg-slate-800">
+                <button onClick={() => { setIsPlaying(false); handlePrev(); }} className="p-2.5 sm:p-2 rounded-md hover:bg-slate-800 active:bg-slate-800/80">
                   <ChevronLeft size={18} />
                 </button>
-                <button onClick={() => setIsPlaying(p => !p)} className="p-2 rounded-md hover:bg-slate-800">
+                <button onClick={() => setIsPlaying(p => !p)} className="p-2.5 sm:p-2 rounded-md hover:bg-slate-800 active:bg-slate-800/80">
                   {isPlaying ? <Pause size={18} /> : <Play size={18} />}
                 </button>
-                <button onClick={() => { setIsPlaying(false); handleNext(); }} className="p-2 rounded-md hover:bg-slate-800">
+                <button onClick={() => { setIsPlaying(false); handleNext(); }} className="p-2.5 sm:p-2 rounded-md hover:bg-slate-800 active:bg-slate-800/80">
                   <ChevronRight size={18} />
                 </button>
                 <div className="ml-3 text-[12px] font-mono text-slate-300">{actionIndex < 0 ? 'Start' : `Action ${actionIndex + 1}/${totalActions}`}</div>
               </div>
 
               <div className="flex items-center gap-2">
-                <button onClick={() => { setIsPlaying(false); handleJumpTo(0); }} className="p-2 rounded-md hover:bg-slate-800"><SkipBack size={16} /></button>
-                <button onClick={() => { setIsPlaying(false); handleJumpTo(totalActions - 1); }} className="p-2 rounded-md hover:bg-slate-800"><SkipForward size={16} /></button>
+                <button onClick={() => { setIsPlaying(false); handleJumpTo(0); }} className="p-2.5 sm:p-2 rounded-md hover:bg-slate-800 active:bg-slate-800/80"><SkipBack size={16} /></button>
+                <button onClick={() => { setIsPlaying(false); handleJumpTo(totalActions - 1); }} className="p-2.5 sm:p-2 rounded-md hover:bg-slate-800 active:bg-slate-800/80"><SkipForward size={16} /></button>
               </div>
             </div>
 
-            <div className="flex-1 bg-black/40 rounded-xl border border-slate-800 p-3 overflow-y-auto custom-scrollbar space-y-2">
+            <div className="flex-1 bg-black/40 rounded-xl border border-slate-800 p-2.5 sm:p-3 overflow-y-auto custom-scrollbar space-y-2">
               {resolutionLogs.length === 0 && (
                 isMultiplayer && isResolving ? (
                   <div className="text-slate-400 text-sm font-mono flex items-center gap-2"><Activity className="animate-spin text-sky-400" size={14} /> Awaiting server resolution...</div>
@@ -280,7 +282,7 @@ export const ResolutionView: React.FC<ResolutionViewProps> = ({
 
                 return (
                   <div key={i} onClick={() => { setIsPlaying(false); handleJumpTo(i); }}
-                    className={`p-2 rounded transition-colors cursor-pointer ${i === actionIndex ? 'bg-slate-800 border border-white' : 'hover:bg-slate-900/60'}`}>
+                    className={`p-2.5 sm:p-2 rounded-lg transition-colors cursor-pointer ${i === actionIndex ? 'bg-slate-800 border border-white/70' : 'hover:bg-slate-900/60 active:bg-slate-900/80'}`}>
                     <div className="flex justify-between items-center">
                       <div className="text-[12px] font-black uppercase text-slate-200">{log.type}</div>
                       <div className="text-[11px] font-mono text-slate-400">{i + 1}</div>
