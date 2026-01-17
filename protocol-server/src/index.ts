@@ -55,10 +55,6 @@ gameServer.define("combat_room", CombatRoom);
 // Optional: Add a Lobby for matchmaking visibility
 gameServer.define("lobby", LobbyRoom);
 
-
-// 4. ROOM DEFINITIONS
-gameServer.define("combat_room", CombatRoom);
-
 // 5. BOOT ENGINE - The 'Proper' Colyseus way for Express
 httpServer.listen(port, "0.0.0.0", () => {
     console.log(`

@@ -115,11 +115,21 @@ export class CombatRoom extends Room<CombatState> {
 }
 
     onLeave(client: Client, consented: boolean) {
-        this.state.players.delete(client.sessionId);
-  console.log(client.sessionId, "left. Remaining:", this.state.players.size);
+        // Get player data BEFORE deletion to prevent null reference
         const player = this.state.players.get(client.sessionId);
-        if (!player) return;
+        console.log(client.sessionId, "left. Remaining:", this.state.players.size);
+        
+        if (!player) {
+            // Player not found, but still clean up any timers
+            const timer = this.forfeitTimers.get(client.sessionId);
+            if (timer) {
+                this.clock.clearTimeout(timer);
+                this.forfeitTimers.delete(client.sessionId);
+            }
+            return;
+        }
 
+        // Update player state before deletion
         player.connected = false;
         player.isReady = false;
 
@@ -133,6 +143,9 @@ export class CombatRoom extends Room<CombatState> {
             }, 60000);
             this.forfeitTimers.set(client.sessionId, timer);
         }
+
+        // Delete player last after all operations complete
+        this.state.players.delete(client.sessionId);
     }
     
     handleForfeit(failedId: string) {

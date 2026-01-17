@@ -4,8 +4,10 @@ import { Player, GridMap, ResolutionLog, Phase, Action, UnitType } from '../shar
 import { mapSchemaToPlayer, mapSchemaToMap } from '../utils/clientSchemaMapper';
 
 // --- CONFIGURATION ---
-const BASE_URL = "https://miniature-halibut-5g4gg6g4v9p73pgjv-8080.app.github.dev";
-const WS_HOST = "miniature-halibut-5g4gg6g4v9p73pgjv-8080.app.github.dev";
+const BASE_URL = import.meta.env.VITE_SERVER_URL || "https://miniature-halibut-5g4gg6g4v9p73pgjv-8080.app.github.dev";
+const WS_HOST = import.meta.env.VITE_WS_HOST || "miniature-halibut-5g4gg6g4v9p73pgjv-8080.app.github.dev";
+const WS_PORT = import.meta.env.VITE_WS_PORT || "443";
+const WS_PROTOCOL = import.meta.env.VITE_WS_PROTOCOL || "wss";
 
 // SINGLETON CLIENT
 const globalClient = new Colyseus.Client(BASE_URL);
@@ -119,6 +121,13 @@ export function useMultiplayer() {
 
         roomInstance.onMessage("resolutionLogs", (serverLogs: any[]) => {
             if (!isMountedRef.current) return;
+            
+            // Validate serverLogs structure
+            if (!Array.isArray(serverLogs)) {
+                console.error("[NETWORK] Invalid resolutionLogs format:", serverLogs);
+                return;
+            }
+            
             console.log("[NETWORK] Resolution starting.");
             // Enrich logs with attacker/target names using current server player snapshot
             const playerMap: Record<string, any> = {};
@@ -139,13 +148,24 @@ export function useMultiplayer() {
 
         roomInstance.onMessage("gameOver", (data: { winnerId: string }) => {
             if (!isMountedRef.current) return;
-            setWinnerId(data.winnerId);
+            
+            // Validate gameOver data structure
+            if (!data || typeof data !== 'object') {
+                console.error("[NETWORK] Invalid gameOver message format:", data);
+                return;
+            }
+            
+            setWinnerId(data.winnerId || null);
             setPhase(Phase.GAME_OVER);
         });
 
         roomInstance.onMessage("error", (msg) => {
             if (!isMountedRef.current) return;
-            setError(msg.message);
+            
+            // Validate error message structure
+            const errorMessage = msg?.message || 'Unknown error occurred';
+            console.error("[NETWORK] Server error:", errorMessage);
+            setError(errorMessage);
             setTimeout(() => {
                 if (isMountedRef.current) setError(null);
             }, 5000);
@@ -197,8 +217,8 @@ export function useMultiplayer() {
             
             // Overrides
             reservation.server = WS_HOST;
-            reservation.protocol = "wss";
-            reservation.port = 443;
+            reservation.protocol = WS_PROTOCOL;
+            reservation.port = parseInt(WS_PORT);
 
             console.log("[NETWORK] Consuming Reservation:", reservation.sessionId);
             
@@ -247,14 +267,34 @@ export function useMultiplayer() {
 
     const leaveMatch = () => {
         if (room) {
+            console.log("[NETWORK] Manually leaving match");
             room.leave();
             setRoom(null);
         }
-        // Force unlock
+        
+        // Force unlock and complete state reset
         isGlobalJoining = false;
         setIsConnected(false);
+        setIsConnecting(false);
         setIsResolving(false);
+        setError(null);
         setPhase(Phase.GAME_TYPE_SELECTION);
+        setPlayers([]);
+        setTargetPlayers([]);
+        setActiveMap(null);
+        setRound(1);
+        setLogs([]);
+        setTurnTimer(30);
+        setWinnerId(null);
+        setSessionId("");
+        
+        // Reset server state reference
+        serverStateRef.current = {
+            players: [],
+            phase: Phase.GAME_TYPE_SELECTION,
+            round: 1,
+            map: null
+        };
     };
 
     const onResolutionComplete = useCallback(() => {

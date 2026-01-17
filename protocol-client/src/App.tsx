@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Phase, VisualLevel, Tab, GameMode } from '../src/shared/types';
+import { Phase, VisualLevel, Tab, GameMode } from '../shared/types';
 import { useGameState } from './hooks/useGameState';
 
 // --- VIEW IMPORTS ---
@@ -32,8 +32,8 @@ import {
 } from 'lucide-react';
 
 // --- DATA & SERVICES ---
-import { CHAOS_DECK } from '../src/shared/constants';
-import { UNITS } from '../src/shared/operativeRegistry';
+import { CHAOS_DECK } from './shared/constants';
+import { UNITS } from './shared/operativeRegistry';
 import { AudioService } from './services/audioService';
 
 const App: React.FC = () => {
