@@ -123,7 +123,7 @@ export class CombatRoom extends Room<CombatState> {
             // Player not found, but still clean up any timers
             const timer = this.forfeitTimers.get(client.sessionId);
             if (timer) {
-                this.clock.clearTimeout(timer);
+                this.clock.clear();
                 this.forfeitTimers.delete(client.sessionId);
             }
             return;
