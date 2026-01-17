@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Phase, VisualLevel, Tab, GameMode } from '../shared/types';
+import { Phase, VisualLevel, Tab, GameMode } from '@shared/types';
 import { useGameState } from './hooks/useGameState';
 
 // --- VIEW IMPORTS ---
