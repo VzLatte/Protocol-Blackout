@@ -10,7 +10,8 @@ export default defineConfig(({ mode }) => {
     return {
       // Explicitly set the root to the protocol-client folder
       root: './',
-      
+      base: './', // This forces relative paths for CSS and JS in your index.html
+
       server: {
         port: 3000,
         host: '0.0.0.0', // Required for GitHub Codespaces/Docker
